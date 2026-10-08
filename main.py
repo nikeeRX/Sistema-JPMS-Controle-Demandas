@@ -94,7 +94,7 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
                             <h5 class="text-danger">Restaurar ou Migrar Base de Dados</h5>
                             <form action="/admin/importar" method="POST" enctype="multipart/form-data" class="d-flex flex-column align-items-center mt-2">
                                 <input type="file" name="file_backup" class="form-control form-control-sm w-75 mb-2" accept=".xlsx,.db" required>
-                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações atuais da Nuvem serão APAGADAS e substituídas por este ficheiro. Deseja continuar?');">⬆ Importar Ficheiro</button>
+                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações da Nuvem serão APAGADAS. Deseja continuar?');">⬆ Importar Ficheiro</button>
                             </form>
                         </div>
                     </div>
@@ -167,7 +167,12 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
             </form>
         </div>
     </div>
-    <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
+    <div class="card shadow-sm border-0"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Demandas</h5>
+            <span class="badge bg-primary fs-6">{{ demandas|length }} Registo(s) Encontrado(s)</span>
+        </div>
+        <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em;">
             <thead class="table-dark"><tr><th>ID</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
             <tbody>{% for d in demandas %}<tr>
@@ -211,7 +216,12 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             </form>
         </div>
     </div>
-    <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
+    <div class="card shadow-sm border-0"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos</h5>
+            <span class="badge bg-primary fs-6">{{ rotinas|length }} Registo(s) Encontrado(s)</span>
+        </div>
+        <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em;">
             <thead class="table-dark"><tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
             <tbody>{% for d in rotinas %}<tr>
@@ -254,12 +264,11 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
             <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-warning" style="font-size: 3rem;">🌍</h1><h4 class="fw-bold text-secondary">Cruzamento Regional em Massa</h4><p class="text-muted">Análise de cobertura completa comparando a Postal com a Operadora Intermediária.</p><a href="/pentefino/regional" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
         </div>
         <div class="col-md-5 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente usando Nome ou CNPJ.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
+            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente e avalie o Pool da Região.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
         </div>
     </div>
 </div></body></html>"""
 
-# TELA COM JAVASCRIPT (SHEETJS) INJETADO PARA LER CABEÇALHOS ANTES DO UPLOAD
 TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
 <body style="background-color: #f0f2f5;">
@@ -312,9 +321,7 @@ function lerCabecalho(input, selectId1, selectId2) {
             s1.innerHTML = ''; s2.innerHTML = '';
             headers.forEach(h => {
                 let text = (h || '').toString().trim().toUpperCase();
-                if(text) {
-                    s1.options.add(new Option(text, text)); s2.options.add(new Option(text, text));
-                }
+                if(text) { s1.options.add(new Option(text, text)); s2.options.add(new Option(text, text)); }
             });
         }
     };
@@ -323,7 +330,8 @@ function lerCabecalho(input, selectId1, selectId2) {
 </script>
 </body></html>"""
 
-TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Busca Individual (Sniper)</span></div></nav>
 <div class="container mt-4">
@@ -334,8 +342,8 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
             <form method="POST" action="/pentefino/individual" enctype="multipart/form-data">
                 <div class="row mb-3 bg-light p-3 rounded">
                     <div class="col-md-6 border-end">
-                        <label class="form-label fw-bold text-primary">1. Base Postal Saúde</label>
-                        <input type="file" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                        <label class="form-label fw-bold text-primary">1. Base Postal Saúde (Upload p/ liberar as buscas)</label>
+                        <input type="file" name="f_postal" id="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="carregarInteligencia(this)">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-success">2. Base Geográfica (IBGE)</label>
@@ -346,17 +354,103 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
                 <div class="row mt-4">
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold text-danger">Pesquisar Alvo (Nome OU CNPJ)</label>
-                        <input type="text" name="alvo" class="form-control border-danger" placeholder="Ex: CLINICA SANTA HELENA ou 13086053000119" required>
+                        <!-- AUTOCOMPLETAR MÁGICO -->
+                        <input type="text" name="alvo" list="lista_alvos" class="form-control border-danger" placeholder="Carregue a planilha acima para liberar a pesquisa..." required autocomplete="off">
+                        <datalist id="lista_alvos"></datalist>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Filtro de Tipo Prestador (Opcional)</label>
-                        <input type="text" name="filtro_tipo" class="form-control" placeholder="Deixe em branco para procurar todos os tipos">
+                        <label class="form-label fw-bold">Filtro de Tipo Prestador</label>
+                        <select name="filtro_tipo" id="filtro_tipo" class="form-select">
+                            <option value="">Todos (Sem filtro)</option>
+                        </select>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="this.innerHTML='A processar... Aguarde!'; this.style.opacity='0.7';">Procurar Substitutos e Descarregar Relatório (Excel)</button>
+                <button type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="this.innerHTML='A processar cruzamento... Aguarde!'; this.style.opacity='0.7';">🔍 Procurar Substitutos</button>
             </form>
         </div>
     </div>
+</div>
+<script>
+function carregarInteligencia(input) {
+    if (!input.files || input.files.length === 0) return;
+    let file = input.files[0];
+    let reader = new FileReader();
+    reader.onload = function(e) {
+        let data = new Uint8Array(e.target.result);
+        let workbook = XLSX.read(data, {type: 'array'});
+        let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        let rows = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
+
+        let datalist = document.getElementById('lista_alvos');
+        let selectTipo = document.getElementById('filtro_tipo');
+        datalist.innerHTML = '';
+        selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>';
+        let tiposSet = new Set();
+
+        rows.forEach(row => {
+            let keys = Object.keys(row);
+            let colCnpj = keys.find(k => k.toUpperCase().includes('CNPJ'));
+            let colNome = keys.find(k => k.toUpperCase().includes('NOME') || k.toUpperCase().includes('RAZAO') || k.toUpperCase().includes('FANTASIA') || k.toUpperCase() === 'PRESTADOR');
+            let colTipo = keys.find(k => k.toUpperCase().includes('TIPO PRESTADOR') || k.toUpperCase() === 'TIPO');
+
+            let cnpj = colCnpj ? row[colCnpj].toString().replace(/\D/g, '') : '';
+            let nome = colNome ? row[colNome].toString().trim() : '';
+            let tipo = colTipo ? row[colTipo].toString().trim().toUpperCase() : '';
+
+            if (cnpj && nome) {
+                let option = document.createElement('option');
+                option.value = cnpj + ' - ' + nome;
+                datalist.appendChild(option);
+            }
+            if (tipo && tipo !== 'NAN' && tipo !== '') { tiposSet.add(tipo); }
+        });
+
+        let tiposArr = Array.from(tiposSet).sort();
+        tiposArr.forEach(t => {
+            let option = document.createElement('option');
+            option.value = t; option.text = t;
+            selectTipo.appendChild(option);
+        });
+    };
+    reader.readAsArrayBuffer(file);
+}
+</script>
+</body></html>"""
+
+TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Resultados Pente Fino</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body style="background-color: #f0f2f5;">
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino/individual" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Resultados Sniper</span></div></nav>
+<div class="container mt-4">
+    <div class="alert alert-success d-flex justify-content-between align-items-center shadow-sm">
+        <div>
+            <h4 class="fw-bold mb-1">✅ Análise Concluída!</h4>
+            <p class="mb-0 text-dark">Alvo: <strong>{{ alvo_nome }}</strong> ({{ alvo_cnpj }})</p>
+        </div>
+        <!-- BOTÃO MÁGICO: Baixa o Excel que está escondido no HTML -->
+        <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Descarregar Planilha Completa (Excel)</a>
+    </div>
+
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-header bg-primary text-white fw-bold fs-5">🏆 Prestadores Internos com 100% de Cobertura (Zero Vulnerabilidades)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center">
+                    <thead class="table-light"><tr><th>Proximidade</th><th>CNPJ</th><th class="text-start">Prestador</th><th>Município/UF</th><th>Tipo</th></tr></thead>
+                    <tbody>
+                        {% for r in resultados_100 %}
+                        <tr>
+                            <td><span class="badge bg-info text-dark">{{ r[2] }}</span></td>
+                            <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td><td>{{ r[5] }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-4 fs-5">Nenhum prestador interno com 100% de cobertura encontrado.<br>Baixe a planilha acima para avaliar os prestadores parciais e o Pool da Região.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="text-center mt-4 mb-5"><a href="/pentefino/individual" class="btn btn-secondary px-4 fw-bold">Fazer Nova Busca</a></div>
 </div></body></html>"""
 
 
@@ -404,7 +498,6 @@ def ler_arquivo(file_obj):
 # ==========================================
 # ROTAS DO SERVIDOR WEB
 # ==========================================
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -436,12 +529,10 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# -------- ROTA: ADMINISTRAÇÃO & BANCO DE DADOS --------
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-
     if request.method == 'POST':
         acao = request.form.get('acao')
         if acao == 'adicionar':
@@ -454,7 +545,6 @@ def admin():
             uid = request.form.get('user_id')
             c.execute(f"DELETE FROM users WHERE id={ph}", (uid,))
             conn.commit(); flash("Utilizador excluído com sucesso!", "warning")
-
     c.execute("SELECT id, username, role, first_login FROM users ORDER BY id ASC")
     usuarios = c.fetchall(); conn.close()
     return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios)
@@ -468,30 +558,21 @@ def exportar_backup():
         df_avulsas = pd.read_sql_query("SELECT * FROM demandas_avulsas", conn)
         df_users = pd.read_sql_query("SELECT * FROM users", conn) 
         conn.close()
-        
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_demands.to_excel(writer, sheet_name='Rotina_PDFs', index=False)
             df_avulsas.to_excel(writer, sheet_name='Demandas_Avulsas', index=False)
             df_users.to_excel(writer, sheet_name='Usuarios', index=False)
         output.seek(0)
-        nome_arquivo = f"Backup_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.xlsx"
-        return send_file(output, download_name=nome_arquivo, as_attachment=True)
-    except Exception as e:
-        flash(f"Erro ao gerar backup: {e}", "danger"); return redirect(url_for('admin'))
+        return send_file(output, download_name=f"Backup_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.xlsx", as_attachment=True)
+    except Exception as e: flash(f"Erro ao gerar backup: {e}", "danger"); return redirect(url_for('admin'))
 
 @app.route('/admin/importar', methods=['POST'])
 def importar_backup():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
     file = request.files.get('file_backup')
-    if not file:
-        flash("Nenhum ficheiro selecionado.", "danger"); return redirect(url_for('admin'))
-        
+    if not file: flash("Nenhum ficheiro selecionado.", "danger"); return redirect(url_for('admin'))
     filename = file.filename.lower()
-    if not (filename.endswith('.xlsx') or filename.endswith('.db')):
-        flash("Selecione um ficheiro Excel (.xlsx) ou Base de Dados SQLite (.db) válido.", "danger")
-        return redirect(url_for('admin'))
-        
     try:
         conn = conectar_db(); c = conn.cursor(); is_postgres = "psycopg2" in str(type(conn))
         if filename.endswith('.xlsx'):
@@ -501,13 +582,8 @@ def importar_backup():
                 if aba in sheets:
                     df = pd.read_excel(xls, sheet_name=aba); c.execute(f"DELETE FROM {tabela}") 
                     if not df.empty:
-                        df = df.where(pd.notnull(df), None)
-                        cols = ", ".join(df.columns); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
+                        df = df.where(pd.notnull(df), None); cols = ", ".join(df.columns); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
                         c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", df.values.tolist())
-                        if is_postgres:
-                            try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
-                            except: pass
-
         elif filename.endswith('.db'):
             import sqlite3, tempfile
             temp_db = os.path.join(tempfile.gettempdir(), "temp_migration.db")
@@ -515,28 +591,17 @@ def importar_backup():
             sqlite_conn = sqlite3.connect(temp_db); sqlite_c = sqlite_conn.cursor()
             for tabela in ['demands', 'demandas_avulsas', 'users']:
                 try:
-                    sqlite_c.execute(f"SELECT * FROM {tabela}")
-                    rows = sqlite_c.fetchall()
+                    sqlite_c.execute(f"SELECT * FROM {tabela}"); rows = sqlite_c.fetchall()
                     if rows:
-                        col_names = [description[0] for description in sqlite_c.description]
-                        cols = ", ".join(col_names); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(col_names))
-                        c.execute(f"DELETE FROM {tabela}") 
-                        c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", rows)
-                        if is_postgres:
-                            try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
-                            except: pass
-                except Exception as e_tab: flash(f"Aviso: Tabela {tabela} ignorada. {e_tab}", "warning")
+                        cols = ", ".join([desc[0] for desc in sqlite_c.description]); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(sqlite_c.description))
+                        c.execute(f"DELETE FROM {tabela}"); c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", rows)
+                except Exception: pass
             sqlite_conn.close(); os.remove(temp_db)
-            
         conn.commit(); conn.close(); session.clear()
-        flash("Base de Dados importada com sucesso! Inicie sessão novamente.", "success")
+        flash("Base de Dados importada! Inicie sessão novamente.", "success")
         return redirect(url_for('login'))
-        
-    except Exception as e:
-        flash(f"Falha ao restaurar banco. Erro: {e}", "danger"); return redirect(url_for('admin'))
+    except Exception as e: flash(f"Falha ao restaurar banco. Erro: {e}", "danger"); return redirect(url_for('admin'))
 
-
-# -------- ROTAS DO MÓDULO DEMANDAS --------
 @app.route('/demandas')
 def hub_demandas():
     if 'user' not in session: return redirect(url_for('login'))
@@ -546,7 +611,6 @@ def hub_demandas():
 def demandas_avulsas():
     if 'user' not in session: return redirect(url_for('login'))
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    
     if request.method == 'POST':
         acao = request.form.get('acao')
         if acao == 'nova':
@@ -554,44 +618,31 @@ def demandas_avulsas():
             sol = request.form.get('solicitante'); prazo = request.form.get('prazo')
             dt_ent = datetime.now().strftime("%d/%m/%Y %H:%M")
             c.execute(f"INSERT INTO demandas_avulsas (tipo_demanda, assunto, solicitante, data_entrada, prazo, status, responsavel, observacao) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Pendente', 'Nenhum', '')", (td, assunto, sol, dt_ent, prazo))
-            flash("Demanda Avulsa criada com sucesso!", "success")
-        elif acao == 'assumir':
-            d_id = request.form.get('id')
-            c.execute(f"UPDATE demandas_avulsas SET status='Em Análise', responsavel={ph} WHERE id={ph}", (session['user'], d_id))
-        elif acao == 'concluir':
-            d_id = request.form.get('id'); dt_c = datetime.now().strftime("%d/%m/%Y")
-            c.execute(f"UPDATE demandas_avulsas SET status='Concluído', data_conclusao={ph} WHERE id={ph}", (dt_c, d_id))
+            flash("Demanda Avulsa criada!", "success")
+        elif acao == 'assumir': c.execute(f"UPDATE demandas_avulsas SET status='Em Análise', responsavel={ph} WHERE id={ph}", (session['user'], request.form.get('id')))
+        elif acao == 'concluir': c.execute(f"UPDATE demandas_avulsas SET status='Concluído', data_conclusao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y"), request.form.get('id')))
         conn.commit()
 
-    # FILTROS GET
     s_filtro = request.args.get('status', 'Todos'); t_filtro = request.args.get('tipo', 'Todos'); r_filtro = request.args.get('resp', 'Todos')
     q = "SELECT * FROM demandas_avulsas WHERE 1=1"; p = []
     if s_filtro != 'Todos': q += f" AND status={ph}"; p.append(s_filtro)
     if t_filtro != 'Todos': q += f" AND tipo_demanda={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND responsavel={ph}"; p.append(r_filtro)
-    q += " ORDER BY id DESC"
-    
-    c.execute(q, tuple(p)); demandas = c.fetchall()
-    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]
-    conn.close()
+    c.execute(q + " ORDER BY id DESC", tuple(p)); demandas = c.fetchall()
+    c.execute("SELECT username FROM users"); usuarios = ['Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
     return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA)
 
 @app.route('/demandas/rotinas')
 def demandas_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    
-    # FILTROS GET
     s_filtro = request.args.get('status', 'Todos'); t_filtro = request.args.get('tipo', 'Todos'); r_filtro = request.args.get('resp', 'Todos')
     q = "SELECT * FROM demands WHERE 1=1"; p = []
     if s_filtro != 'Todos': q += f" AND status={ph}"; p.append(s_filtro)
     if t_filtro != 'Todos': q += f" AND type={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
-    q += " ORDER BY id DESC"
-    
-    c.execute(q, tuple(p)); rotinas = c.fetchall()
-    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]
-    conn.close()
+    c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
+    c.execute("SELECT username FROM users"); usuarios = ['Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
     return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
@@ -656,9 +707,7 @@ def upload_rotinas():
         c.execute(f"INSERT INTO demands (filename, filepath, type, status, assigned_to, prestador, cnpj, municipio, uf, data_entrada) VALUES ({ph}, 'WEB_UPLOAD', {ph}, 'Pendente', 'Nenhum', {ph}, {ph}, {ph}, {ph}, {ph})", 
                      (f_name, dem, prest, cnpj_p, mun, uf, datetime.now().strftime("%d/%m/%Y %H:%M")))
         count += 1
-        
-    conn.commit(); conn.close()
-    flash(f"{count} PDFs processados com sucesso!", "success")
+    conn.commit(); conn.close(); flash(f"{count} PDFs processados com sucesso!", "success")
     return redirect(url_for('demandas_rotinas'))
 
 @app.route('/demandas/rotinas/acao', methods=['POST'])
@@ -666,9 +715,7 @@ def acao_rotinas():
     d_id = request.form.get('id'); acao = request.form.get('acao')
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
     if acao == 'assumir': c.execute(f"UPDATE demands SET status='Em Análise', assigned_to={ph} WHERE id={ph}", (session['user'], d_id))
-    elif acao == 'finalizar':
-        dt_c = datetime.now().strftime("%d/%m/%Y %H:%M")
-        c.execute(f"UPDATE demands SET status='Finalizada', data_finalizacao={ph} WHERE id={ph}", (dt_c, d_id))
+    elif acao == 'finalizar': c.execute(f"UPDATE demands SET status='Finalizada', data_finalizacao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y %H:%M"), d_id))
     conn.commit(); conn.close()
     return redirect(url_for('demandas_rotinas'))
 
@@ -706,7 +753,6 @@ def dashboard_graficos():
     conn.close()
     return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=0, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo)
 
-# -------- ROTAS DO MÓDULO PENTE FINO (RN 665) --------
 @app.route('/pentefino')
 def hub_pentefino():
     if 'user' not in session: return redirect(url_for('login'))
@@ -737,9 +783,7 @@ def pentefino_regional():
 
         dics_processados = []
         for df in [df_postal, df_operadora]:
-            col_ibge = cacador_de_colunas(df, ['IBGE', 'CÓDIGO IBGE'])
-            col_mun = cacador_de_colunas(df, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
-            col_uf = cacador_de_colunas(df, ['UF', 'ESTADO'])
+            col_ibge = cacador_de_colunas(df, ['IBGE', 'CÓDIGO IBGE']); col_mun = cacador_de_colunas(df, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']); col_uf = cacador_de_colunas(df, ['UF', 'ESTADO'])
             if col_ibge: df['REG_IBGE'] = df[col_ibge].apply(limpar_ibge).map(map_ibge_regiao)
             else: df['REG_IBGE'] = None
             if col_mun and col_uf: df['REG_GEO'] = (df[col_mun].apply(normalizar_texto) + "_" + df[col_uf].apply(normalizar_texto)).map(map_geo_regiao)
@@ -820,12 +864,8 @@ def pentefino_regional():
 
         ws.column_dimensions['A'].width = 20; ws.column_dimensions['B'].width = 45; ws.column_dimensions['C'].width = 25; ws.column_dimensions['D'].width = 65
         wb.save(output); output.seek(0)
-        nome_arquivo = f"Relatorio_Regional_{datetime.now().strftime('%Hh%Mm')}.xlsx"
-        return send_file(output, download_name=nome_arquivo, as_attachment=True)
-
-    except Exception as e:
-        flash(f"Erro ao processar as planilhas: {e}", "danger")
-        return redirect(url_for('pentefino_regional'))
+        return send_file(output, download_name=f"Relatorio_Regional_{datetime.now().strftime('%Hh%Mm')}.xlsx", as_attachment=True)
+    except Exception as e: flash(f"Erro ao processar as planilhas: {e}", "danger"); return redirect(url_for('pentefino_regional'))
 
 @app.route('/pentefino/individual', methods=['GET', 'POST'])
 def pentefino_individual():
@@ -834,8 +874,6 @@ def pentefino_individual():
         
     try:
         f_postal = request.files.get('f_postal'); f_ibge = request.files.get('f_ibge')
-        
-        # BUSCA INTELIGENTE: NOME OU CNPJ
         alvo_bruto = request.form.get('alvo', '').strip().upper()
         filtro_tipo = request.form.get('filtro_tipo', '').strip().upper()
         
@@ -843,30 +881,22 @@ def pentefino_individual():
         df_ind.columns = [str(c).strip().upper() for c in df_ind.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_cnpj_ind = cacador_de_colunas(df_ind, ['CNPJ', 'CPFCNPJ'])
-        col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
-        col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
-        col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
-        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO'])
-        col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
+        col_cnpj_ind = cacador_de_colunas(df_ind, ['CNPJ', 'CPFCNPJ']); col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
+        col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']); col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
+        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO']); col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
         col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CÓDIGO IBGE'])
         
-        if not col_cnpj_ind or not col_nome_ind:
-            flash("Colunas básicas (Nome/CNPJ) não encontradas na base da Postal.", "danger"); return redirect(url_for('pentefino_individual'))
+        if not col_cnpj_ind or not col_nome_ind: flash("Colunas básicas não encontradas.", "danger"); return redirect(url_for('pentefino_individual'))
             
-        # Converte a coluna de CNPJ para string e remove não números para facilitar a busca
         df_ind[col_cnpj_ind] = df_ind[col_cnpj_ind].astype(str).str.replace(r'\D', '', regex=True)
         
-        # MOTOR DE BUSCA SNIPER (Nome ou CNPJ)
+        # BUSCA SNIPER INTELIGENTE (Trata nome com caracteres ou apenas CNPJ)
         alvo_numeros = re.sub(r'\D', '', alvo_bruto)
-        # Cria uma máscara verificando se o alvo_bruto está no Nome OU se o alvo_numeros está no CNPJ
-        mask = df_ind[col_nome_ind].fillna('').astype(str).str.upper().str.contains(alvo_bruto, na=False)
-        if len(alvo_numeros) > 3: 
-            mask = mask | (df_ind[col_cnpj_ind].str.contains(alvo_numeros, na=False))
+        mask = df_ind[col_nome_ind].fillna('').astype(str).str.upper().str.contains(alvo_bruto, na=False, regex=False)
+        if len(alvo_numeros) > 3: mask = mask | (df_ind[col_cnpj_ind].str.contains(alvo_numeros, na=False, regex=False))
         
         linhas_alvo = df_ind[mask]
-        if linhas_alvo.empty:
-            flash(f"O Alvo '{alvo_bruto}' não foi encontrado na base.", "danger"); return redirect(url_for('pentefino_individual'))
+        if linhas_alvo.empty: flash(f"O Alvo '{alvo_bruto}' não foi encontrado na base.", "danger"); return redirect(url_for('pentefino_individual'))
             
         row_alvo = linhas_alvo.iloc[0]
         cnpj_alvo = str(row_alvo.get(col_cnpj_ind, '')).strip()
@@ -876,8 +906,6 @@ def pentefino_individual():
         if col_esp_ind: dict_agg[col_esp_ind] = lambda s: ", ".join(sorted(list(extrair_especialidades(s))))
         if col_tipo_ind: dict_agg[col_tipo_ind] = lambda x: " | ".join(x.dropna().astype(str).unique())
         group_cols = [c for c in [col_cnpj_ind, col_nome_ind, col_mun_ind, col_uf_ind, col_ibge_ind] if c]
-        
-        # Agrupamento para remover duplicatas
         df_ind = df_ind.groupby(group_cols, dropna=False).agg(dict_agg).reset_index()
 
         c_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); c_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
@@ -890,7 +918,6 @@ def pentefino_individual():
         df_ibge['CHAVE_GEO'] = df_ibge[c_mun].apply(normalizar_texto) + "_" + df_ibge[c_uf].apply(normalizar_texto)
         map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao]))
 
-        # Atualizando a linha alvo após agrupamento
         linhas_alvo_agrupadas = df_ind[df_ind[col_cnpj_ind] == cnpj_alvo]
         if not linhas_alvo_agrupadas.empty: row_alvo = linhas_alvo_agrupadas.iloc[0]
 
@@ -977,8 +1004,13 @@ def pentefino_individual():
         ws.column_dimensions['E'].width = 20; ws.column_dimensions['F'].width = 25; ws.column_dimensions['G'].width = 65
 
         wb.save(output); output.seek(0)
-        nome_arquivo = f"Relatorio_Substituicao_{cnpj_alvo}.xlsx"
-        return send_file(output, download_name=nome_arquivo, as_attachment=True)
+        
+        # Filtra só os caras com zero faltas (índice 1 é o len(faltante)) para exibir na tela!
+        resultados_100 = [r for r in resultados if r[1] == 0]
+        # Transforma o Excel em um link criptografado para o botão de download verde da tela
+        b64_data = base64.b64encode(output.getvalue()).decode('utf-8')
+        
+        return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, resultados_100=resultados_100)
 
     except Exception as e:
         flash(f"Erro ao processar as planilhas: {e}", "danger")
