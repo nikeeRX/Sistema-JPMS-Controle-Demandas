@@ -62,13 +62,13 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
     <div class="row justify-content-center gap-4">
         <div class="col-md-5">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controlo de Demandas</h4><p class="text-muted mb-4">Gira Rotinas, PDFs, Avulsas e aceda ao Dashboard.</p>
+                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controle de Demandas</h4><p class="text-muted mb-4">Gira Rotinas, PDFs, Avulsas e aceda ao Dashboard.</p>
                 <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2">Aceder ao Módulo</a>
             </div>
         </div>
         <div class="col-md-5">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1><h4>Pente Fino (RN 665)</h4><p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
+                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1><h4>Substituição de Prestadores(RN 665)</h4><p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
                 <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2">Aceder ao Módulo</a>
             </div>
         </div>
