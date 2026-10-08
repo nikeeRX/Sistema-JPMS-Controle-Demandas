@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, url_for, session, flash, render_template_string, send_file
-from config import setup_db, conectar_db, replace_placeholders
+from config import setup_db, conectar_db
 import os
 import PyPDF2
 import re
@@ -8,6 +8,7 @@ import base64
 from io import BytesIO
 import pandas as pd
 
+# Configuração CRÍTICA para o Matplotlib rodar em servidores Web (Sem tela)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -15,8 +16,10 @@ import matplotlib.pyplot as plt
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta_da_postal_saude'
 
+# Inicia o banco de dados
 setup_db()
 
+# Função auxiliar para compatibilidade entre Postgres e SQLite
 def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
@@ -37,11 +40,18 @@ TELA_LOGIN = """
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - COCAP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .login-card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px; }
+        .btn-postal { background-color: #004b87; color: white; font-weight: bold; }
+        .btn-postal:hover { background-color: #003666; color: white; }
+    </style>
 </head>
-<body style="background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh;">
-<div style="border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px;">
+<body>
+<div class="login-card">
     <div class="text-center mb-4">
         <h3 style="color: #004b87; font-weight: 800;">POSTAL SAÚDE</h3>
         <p class="text-muted">Central de Operações (COCAP)</p>
@@ -62,7 +72,7 @@ TELA_LOGIN = """
             <label class="form-label font-weight-bold">Senha</label>
             <input type="password" name="password" class="form-control" required>
         </div>
-        <button type="submit" class="btn w-100 py-2" style="background-color: #004b87; color: white; font-weight: bold;">Entrar no Sistema</button>
+        <button type="submit" class="btn btn-postal w-100 py-2">Entrar no Sistema</button>
     </form>
 </div>
 </body>
@@ -82,36 +92,36 @@ TELA_DASHBOARD = """
   <div class="container-fluid">
     <a class="navbar-brand fw-bold" href="#">COCAP Web</a>
     <div class="d-flex text-white align-items-center">
-      <span class="me-3">Olá, <strong>{{ user }}</strong></span>
+      <span class="me-3">Olá, <strong>{{ user }}</strong> ({{ role }})</span>
       <a href="/logout" class="btn btn-danger btn-sm">Sair</a>
     </div>
   </div>
 </nav>
 
 <div class="container mt-5 text-center">
-    <h1 style="color: #004b87; font-weight: 800; mb-4">PORTAL CENTRAL DE OPERAÇÕES</h1>
-    <div class="row justify-content-center gap-4 mt-5">
+    <h1 style="color: #004b87; font-weight: 800; margin-bottom: 2rem;">PORTAL CENTRAL DE OPERAÇÕES</h1>
+    <div class="row justify-content-center gap-4">
         <div class="col-md-5">
-            <div class="card shadow-sm h-100 p-4">
-                <h1 class="text-info mb-3">📊</h1>
+            <div class="card shadow-sm h-100 p-4 border-0">
+                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1>
                 <h4>Controle de Demandas</h4>
                 <p class="text-muted mb-4">Gerencie Rotinas, PDFs, Avulsas e acesse o Dashboard.</p>
-                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold">Acessar</a>
+                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2">Acessar Módulo</a>
             </div>
         </div>
         <div class="col-md-5">
-            <div class="card shadow-sm h-100 p-4">
-                <h1 class="text-warning mb-3">🏥</h1>
+            <div class="card shadow-sm h-100 p-4 border-0">
+                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1>
                 <h4>Pente Fino (RN 665)</h4>
-                <p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
-                <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold">Acessar</a>
+                <p class="text-muted mb-4">Substituição de Prestadores e análise de vulnerabilidade de rede.</p>
+                <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2">Acessar Módulo</a>
             </div>
         </div>
     </div>
     {% if role == 'admin' %}
     <div class="row justify-content-center mt-4">
         <div class="col-md-5">
-            <a href="/admin" class="btn btn-secondary w-100 fw-bold py-3">⚙️ Painel Administrativo (BD & Usuários)</a>
+            <a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a>
         </div>
     </div>
     {% endif %}
@@ -120,7 +130,6 @@ TELA_DASHBOARD = """
 </html>
 """
 
-# TELA ADMIN TOTALMENTE REFORMULADA COM IMPORT/EXPORT DO BANCO DE DADOS
 TELA_ADMIN = """
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -159,11 +168,11 @@ TELA_ADMIN = """
                             <a href="/admin/exportar" class="btn btn-success fw-bold w-75">⬇ Baixar Backup (Excel)</a>
                         </div>
                         <div class="col-md-6">
-                            <h5 class="text-danger">Restaurar Backup</h5>
-                            <p class="text-muted small">Atenção: O upload de um backup apaga os dados atuais.</p>
+                            <h5 class="text-danger">Restaurar ou Migrar Banco</h5>
+                            <p class="text-muted small">Faça upload do Excel (.xlsx) ou do Banco Antigo (.db)</p>
                             <form action="/admin/importar" method="POST" enctype="multipart/form-data" class="d-flex flex-column align-items-center">
-                                <input type="file" name="file_backup" class="form-control form-control-sm w-75 mb-2" accept=".xlsx" required>
-                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações atuais serão apagadas e substituídas por este arquivo. Deseja continuar?');">⬆ Importar Backup</button>
+                                <input type="file" name="file_backup" class="form-control form-control-sm w-75 mb-2" accept=".xlsx,.db" required>
+                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações atuais da Nuvem serão APAGADAS e substituídas por este arquivo. Deseja continuar?');">⬆ Importar Arquivo</button>
                             </form>
                         </div>
                     </div>
@@ -173,7 +182,7 @@ TELA_ADMIN = """
 
         <!-- ÁREA DE USUÁRIOS -->
         <div class="col-md-12">
-            <div class="card shadow-sm mb-4">
+            <div class="card shadow-sm mb-4 border-0">
                 <div class="card-body">
                     <h5 class="card-title mb-3">Criar Novo Usuário</h5>
                     <form method="POST" action="/admin">
@@ -202,7 +211,7 @@ TELA_ADMIN = """
                 </div>
             </div>
 
-            <div class="card shadow-sm">
+            <div class="card shadow-sm border-0">
                 <div class="card-body">
                     <h5 class="card-title mb-3">Lista de Usuários</h5>
                     <div class="table-responsive">
@@ -258,13 +267,22 @@ TELA_HUB_DEMANDAS = """
 <div class="container mt-5 text-center">
     <div class="row justify-content-center">
         <div class="col-md-4 mb-4">
-            <a href="/demandas/rotinas" class="btn btn-primary w-100 py-4 fw-bold fs-5">📄 Demandas de Rotina (PDFs)</a>
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📄</h1>
+                <a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold fs-6">Demandas de Rotina (PDFs)</a>
+            </div>
         </div>
         <div class="col-md-4 mb-4">
-            <a href="/demandas/avulsas" class="btn btn-warning text-white w-100 py-4 fw-bold fs-5">📝 Demandas Avulsas</a>
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📝</h1>
+                <a href="/demandas/avulsas" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Demandas Avulsas</a>
+            </div>
         </div>
         <div class="col-md-4 mb-4">
-            <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-4 fw-bold fs-5">📊 Dashboard Gerencial</a>
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📊</h1>
+                <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold fs-6">Dashboard Gerencial</a>
+            </div>
         </div>
     </div>
 </div>
@@ -291,7 +309,7 @@ TELA_AVULSAS = """
       {% endif %}
     {% endwith %}
 
-    <div class="card shadow-sm mb-4">
+    <div class="card shadow-sm mb-4 border-0">
         <div class="card-body">
             <form method="POST" action="/demandas/avulsas">
                 <input type="hidden" name="acao" value="nova">
@@ -306,7 +324,7 @@ TELA_AVULSAS = """
         </div>
     </div>
 
-    <div class="card shadow-sm">
+    <div class="card shadow-sm border-0">
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em;">
@@ -317,13 +335,13 @@ TELA_AVULSAS = """
                         {% for d in demandas %}
                         <tr>
                             <td>{{ d[0] }}</td><td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
-                            <td><span class="badge bg-{{ 'warning' if d[6]=='Pendente' else 'success' if d[6]=='Concluído' else 'info' }}">{{ d[6] }}</span></td>
+                            <td><span class="badge bg-{{ 'warning text-dark' if d[6]=='Pendente' else 'success' if d[6]=='Concluído' else 'info' }}">{{ d[6] }}</span></td>
                             <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
                             <td>
                                 <form method="POST" action="/demandas/avulsas" style="display:inline;">
                                     <input type="hidden" name="id" value="{{ d[0] }}">
-                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm" {% if d[6] == 'Concluído' %}disabled{% endif %}>Assumir</button>
-                                    <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm" {% if d[6] == 'Concluído' %}disabled{% endif %}>✔</button>
+                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>Assumir</button>
+                                    <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>✔</button>
                                 </form>
                             </td>
                         </tr>
@@ -357,9 +375,9 @@ TELA_ROTINAS = """
       {% endif %}
     {% endwith %}
 
-    <div class="card shadow-sm mb-4 bg-light border-primary">
-        <div class="card-body text-center">
-            <h5 class="card-title text-primary">Importar Múltiplos PDFs</h5>
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body text-center bg-light rounded">
+            <h5 class="card-title text-primary mb-3">Importar Múltiplos PDFs</h5>
             <form method="POST" action="/demandas/rotinas/upload" enctype="multipart/form-data">
                 <input type="file" name="pdfs" class="form-control mb-3 w-50 mx-auto" multiple accept=".pdf" required>
                 <button type="submit" class="btn btn-primary fw-bold px-5">Processar Arquivos</button>
@@ -367,24 +385,24 @@ TELA_ROTINAS = """
         </div>
     </div>
 
-    <div class="card shadow-sm">
+    <div class="card shadow-sm border-0">
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em;">
                     <thead class="table-dark">
-                        <tr><th>ID</th><th>Data</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr>
+                        <tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr>
                     </thead>
                     <tbody>
                         {% for d in rotinas %}
                         <tr>
-                            <td>{{ d[0] }}</td><td>{{ d[9] }}</td><td class="text-start">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
-                            <td><span class="badge bg-{{ 'warning' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
+                            <td>{{ d[0] }}</td><td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
+                            <td><span class="badge bg-{{ 'warning text-dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
                             <td>{{ d[4] }}</td>
                             <td>
                                 <form method="POST" action="/demandas/rotinas/acao" style="display:inline;">
                                     <input type="hidden" name="id" value="{{ d[0] }}">
-                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Assumir</button>
-                                    <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Finalizar</button>
+                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Assumir</button>
+                                    <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Finalizar</button>
                                 </form>
                             </td>
                         </tr>
@@ -413,23 +431,23 @@ TELA_DASHBOARD_GRAFICOS = """
 
 <div class="container mt-4">
     <div class="row text-center mb-4">
-        <div class="col-md-3"><div class="card bg-primary text-white p-3"><h5>Total</h5><h2>{{ d_total }}</h2></div></div>
-        <div class="col-md-3"><div class="card bg-warning text-dark p-3"><h5>Pendentes</h5><h2>{{ d_pend }}</h2></div></div>
-        <div class="col-md-3"><div class="card bg-info text-white p-3"><h5>Em Análise</h5><h2>{{ d_ana }}</h2></div></div>
-        <div class="col-md-3"><div class="card bg-success text-white p-3"><h5>Concluídas</h5><h2>{{ d_conc }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 bg-primary text-white p-3"><h5 class="mb-1">Total Demandas</h5><h2 class="fw-bold">{{ d_total }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 bg-info text-white p-3"><h5 class="mb-1">Em Análise</h5><h2 class="fw-bold">{{ d_ana }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
     </div>
     
     <div class="row">
         <div class="col-md-6 mb-4">
-            <div class="card shadow-sm"><div class="card-body text-center">
-                <h5>Produtividade por Colaborador</h5>
-                <img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid">
+            <div class="card shadow-sm border-0 h-100"><div class="card-body text-center">
+                <h5 class="fw-bold text-secondary mb-3">Produtividade por Colaborador</h5>
+                <img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid rounded">
             </div></div>
         </div>
         <div class="col-md-6 mb-4">
-            <div class="card shadow-sm"><div class="card-body text-center">
-                <h5>Distribuição por Tipo de Demanda</h5>
-                <img src="data:image/png;base64,{{ chart_tipo }}" class="img-fluid">
+            <div class="card shadow-sm border-0 h-100"><div class="card-body text-center">
+                <h5 class="fw-bold text-secondary mb-3">Distribuição por Tipo de Demanda</h5>
+                <img src="data:image/png;base64,{{ chart_tipo }}" class="img-fluid rounded">
             </div></div>
         </div>
     </div>
@@ -441,9 +459,9 @@ TELA_DASHBOARD_GRAFICOS = """
 TELA_CONSTRUCAO = """
 <!DOCTYPE html>
 <html lang="pt-BR"><head><title>Pente Fino</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
-    <h1 style="font-size: 4rem;">🚧</h1><h2>Módulo: Pente Fino (RN 665)</h2><p>Na próxima etapa, injetaremos o código de upload das planilhas!</p>
-    <a href="/dashboard" class="btn btn-primary mt-4">⬅ Voltar ao Portal</a>
+<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f0f2f5;">
+    <h1 style="font-size: 5rem;">🚧</h1><h2 class="mt-3 text-secondary fw-bold">Módulo: Pente Fino (RN 665)</h2><p class="text-muted">Na próxima etapa, injetaremos o código de upload das planilhas!</p>
+    <a href="/dashboard" class="btn btn-primary mt-4 fw-bold px-4 py-2">⬅ Voltar ao Portal</a>
 </body></html>
 """
 
@@ -457,6 +475,10 @@ def login():
         user = request.form.get('username')
         password = request.form.get('password')
         conn = conectar_db()
+        if not conn:
+            flash("Erro de conexão com o banco de dados.", "danger")
+            return render_template_string(TELA_LOGIN)
+            
         c = conn.cursor()
         ph = get_ph(conn)
         c.execute(f"SELECT id, role FROM users WHERE username={ph} AND password={ph}", (user, password))
@@ -487,9 +509,7 @@ def admin():
     if 'user' not in session or session.get('role') != 'admin':
         return redirect(url_for('dashboard'))
 
-    conn = conectar_db()
-    c = conn.cursor()
-    ph = get_ph(conn)
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
 
     if request.method == 'POST':
         acao = request.form.get('acao')
@@ -511,7 +531,6 @@ def admin():
     conn.close()
     return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios)
 
-# EXPORTAR BACKUP (Gera Excel e envia pro navegador)
 @app.route('/admin/exportar')
 def exportar_backup():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
@@ -519,7 +538,7 @@ def exportar_backup():
         conn = conectar_db()
         df_demands = pd.read_sql_query("SELECT * FROM demands", conn)
         df_avulsas = pd.read_sql_query("SELECT * FROM demandas_avulsas", conn)
-        df_users = pd.read_sql_query("SELECT * FROM users", conn) # Exporta até a senha pra não quebrar na volta
+        df_users = pd.read_sql_query("SELECT * FROM users", conn) 
         conn.close()
         
         output = BytesIO()
@@ -529,63 +548,82 @@ def exportar_backup():
             df_users.to_excel(writer, sheet_name='Usuarios', index=False)
         
         output.seek(0)
-        data_hora = datetime.now().strftime("%Y_%m_%d_%Hh%Mm%Ss")
-        nome_arquivo = f"Backup_COCAP_{data_hora}.xlsx"
-        
+        nome_arquivo = f"Backup_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.xlsx"
         return send_file(output, download_name=nome_arquivo, as_attachment=True)
     except Exception as e:
         flash(f"Erro ao gerar backup: {e}", "danger")
         return redirect(url_for('admin'))
 
-# IMPORTAR BACKUP (Upload do Excel e Destruição/Substituição do Banco)
 @app.route('/admin/importar', methods=['POST'])
 def importar_backup():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
     
     file = request.files.get('file_backup')
-    if not file or not file.filename.endswith('.xlsx'):
-        flash("Selecione um arquivo Excel (.xlsx) válido.", "danger")
+    if not file:
+        flash("Nenhum arquivo selecionado.", "danger")
+        return redirect(url_for('admin'))
+        
+    filename = file.filename.lower()
+    if not (filename.endswith('.xlsx') or filename.endswith('.db')):
+        flash("Selecione um arquivo Excel (.xlsx) ou Banco SQLite (.db) válido.", "danger")
         return redirect(url_for('admin'))
         
     try:
-        xls = pd.ExcelFile(file)
-        sheets = xls.sheet_names
-        
         conn = conectar_db(); c = conn.cursor()
         is_postgres = "psycopg2" in str(type(conn))
         
-        mapeamento = {
-            'Rotina_PDFs': 'demands',
-            'Demandas_Avulsas': 'demandas_avulsas',
-            'Usuarios': 'users'
-        }
-        
-        for aba, tabela in mapeamento.items():
-            if aba in sheets:
-                df = pd.read_excel(xls, sheet_name=aba)
-                
-                # Cuidado: APAGA A TABELA INTEIRA
-                c.execute(f"DELETE FROM {tabela}")
-                
-                if not df.empty:
-                    df = df.where(pd.notnull(df), None)
-                    cols = ", ".join(df.columns)
-                    placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
-                    q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
+        if filename.endswith('.xlsx'):
+            xls = pd.ExcelFile(file)
+            sheets = xls.sheet_names
+            mapeamento = {'Rotina_PDFs': 'demands', 'Demandas_Avulsas': 'demandas_avulsas', 'Usuarios': 'users'}
+            
+            for aba, tabela in mapeamento.items():
+                if aba in sheets:
+                    df = pd.read_excel(xls, sheet_name=aba)
+                    c.execute(f"DELETE FROM {tabela}") 
+                    if not df.empty:
+                        df = df.where(pd.notnull(df), None)
+                        cols = ", ".join(df.columns)
+                        placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
+                        q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
+                        c.executemany(q, df.values.tolist())
+                        if is_postgres:
+                            try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
+                            except: pass
+
+        elif filename.endswith('.db'):
+            import sqlite3
+            temp_db = "temp_migration.db"
+            file.save(temp_db) 
+            sqlite_conn = sqlite3.connect(temp_db)
+            
+            tabelas_db = ['demands', 'demandas_avulsas', 'users']
+            for tabela in tabelas_db:
+                try:
+                    df = pd.read_sql_query(f"SELECT * FROM {tabela}", sqlite_conn)
+                    c.execute(f"DELETE FROM {tabela}") 
+                    if not df.empty:
+                        df = df.where(pd.notnull(df), None)
+                        cols = ", ".join(df.columns)
+                        placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
+                        q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
+                        c.executemany(q, df.values.tolist())
+                        if is_postgres:
+                            try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
+                            except: pass
+                except Exception as e_tab:
+                    print(f"Erro ao migrar tabela {tabela}: {e_tab}")
                     
-                    c.executemany(q, df.values.tolist())
-                    
-                    if is_postgres:
-                        try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
-                        except: pass
-        
+            sqlite_conn.close()
+            os.remove(temp_db)
+            
         conn.commit(); conn.close()
         session.clear()
-        flash("Banco de Dados restaurado com sucesso! Por segurança, faça login novamente.", "success")
+        flash("Banco de Dados importado com sucesso! Os dados antigos foram migrados. Faça login novamente.", "success")
         return redirect(url_for('login'))
         
     except Exception as e:
-        flash(f"Falha ao restaurar banco. Arquivo corrompido ou formato incorreto. Detalhe: {e}", "danger")
+        flash(f"Falha ao restaurar banco. Formato incorreto ou arquivo corrompido. Erro: {e}", "danger")
         return redirect(url_for('admin'))
 
 # -------- ROTAS DO MÓDULO DEMANDAS --------
@@ -741,6 +779,7 @@ def dashboard_graficos():
     c_av = c.fetchone()[0]
     conc = c_rot + c_av
     
+    # Gráfico Produtividade
     fig1, ax1 = plt.subplots(figsize=(6,4))
     c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to")
     dados_prod = c.fetchall()
@@ -752,6 +791,7 @@ def dashboard_graficos():
     chart_prod = base64.b64encode(buf1.read()).decode('utf-8')
     plt.close(fig1)
 
+    # Gráfico Tipos
     fig2, ax2 = plt.subplots(figsize=(6,4))
     c.execute("SELECT type, COUNT(*) FROM demands GROUP BY type")
     dados_tipo = c.fetchall()
@@ -769,7 +809,7 @@ def dashboard_graficos():
 @app.route('/pentefino')
 def pentefino():
     if 'user' not in session: return redirect(url_for('login'))
-    return render_template_string(TELA_CONSTRUCAO, titulo="Pente Fino RN 665")
+    return render_template_string(TELA_CONSTRUCAO)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
