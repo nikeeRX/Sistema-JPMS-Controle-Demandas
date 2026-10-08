@@ -668,6 +668,7 @@ def exportar_backup():
 @app.route('/admin/importar', methods=['POST'])
 def importar_backup():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
+    
     file = request.files.get('file_backup')
     if not file:
         flash("Nenhum ficheiro selecionado.", "danger")
@@ -682,10 +683,12 @@ def importar_backup():
         conn = conectar_db(); c = conn.cursor()
         is_postgres = "psycopg2" in str(type(conn))
         
+        # 1. IMPORTAÇÃO DE EXCEL (.xlsx)
         if filename.endswith('.xlsx'):
             xls = pd.ExcelFile(file)
             sheets = xls.sheet_names
             mapeamento = {'Rotina_PDFs': 'demands', 'Demandas_Avulsas': 'demandas_avulsas', 'Usuarios': 'users'}
+            
             for aba, tabela in mapeamento.items():
                 if aba in sheets:
                     df = pd.read_excel(xls, sheet_name=aba)
@@ -700,36 +703,55 @@ def importar_backup():
                             try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
                             except: pass
 
+        # 2. IMPORTAÇÃO NATIVA DO BANCO ANTIGO (.db)
         elif filename.endswith('.db'):
             import sqlite3
-            temp_db = "temp_migration.db"
+            import tempfile
+            
+            # Guarda o ficheiro numa pasta temporária segura no servidor (Railway)
+            temp_dir = tempfile.gettempdir()
+            temp_db = os.path.join(temp_dir, "temp_migration.db")
             file.save(temp_db) 
+            
+            # Liga-se diretamente ao ficheiro SQLite nativo (Sem usar o Pandas)
             sqlite_conn = sqlite3.connect(temp_db)
+            sqlite_c = sqlite_conn.cursor()
+            
             tabelas_db = ['demands', 'demandas_avulsas', 'users']
             for tabela in tabelas_db:
                 try:
-                    df = pd.read_sql_query(f"SELECT * FROM {tabela}", sqlite_conn)
-                    c.execute(f"DELETE FROM {tabela}") 
-                    if not df.empty:
-                        df = df.where(pd.notnull(df), None)
-                        cols = ", ".join(df.columns)
-                        placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
+                    sqlite_c.execute(f"SELECT * FROM {tabela}")
+                    rows = sqlite_c.fetchall() # Extrai tuplos puros do Python
+                    
+                    if rows:
+                        # Captura as colunas originais
+                        col_names = [description[0] for description in sqlite_c.description]
+                        cols = ", ".join(col_names)
+                        placeholders = ", ".join(["%s" if is_postgres else "?"] * len(col_names))
+                        
+                        c.execute(f"DELETE FROM {tabela}") 
+                        
                         q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
-                        c.executemany(q, df.values.tolist())
+                        c.executemany(q, rows)
+                        
+                        # Atualiza a sequência de IDs do Postgres para não dar erro
                         if is_postgres:
                             try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
                             except: pass
-                except Exception as e_tab: print(f"Erro ao migrar tabela {tabela}: {e_tab}")
-            sqlite_conn.close(); os.remove(temp_db)
+                except Exception as e_tab:
+                    flash(f"Atenção: Erro ao migrar a tabela {tabela}. Detalhe: {e_tab}", "warning")
+                    
+            sqlite_conn.close()
+            os.remove(temp_db)
             
-        conn.commit(); conn.close(); session.clear()
-        flash("Base de Dados importada com sucesso! Os dados antigos foram migrados. Inicie sessão novamente.", "success")
+        conn.commit(); conn.close()
+        session.clear()
+        flash("Base de Dados importada com sucesso! Os registos antigos foram migrados. Inicie sessão novamente.", "success")
         return redirect(url_for('login'))
         
     except Exception as e:
-        flash(f"Falha ao restaurar banco. Erro: {e}", "danger")
+        flash(f"Falha ao restaurar a base de dados. Erro: {e}", "danger")
         return redirect(url_for('admin'))
-
 
 # -------- ROTAS DO MÓDULO DEMANDAS --------
 @app.route('/demandas')
