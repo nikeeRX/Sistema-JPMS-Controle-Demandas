@@ -1,176 +1,155 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-from config import conectar_db, setup_db
-from modulo_admin import AdminFrame
-from modulo_demandas import ControleDemandasFrame
-from modulo_pentefino import PenteFinoFrame
+from flask import Flask, request, redirect, url_for, session, flash, render_template_string
+from config import setup_db, conectar_db
 import os
 
-class AppGestaoDemandas:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Postal Saúde - Central de Operações")
-        self.root.geometry("1440x900")
-        self.root.configure(bg="#f4f4f9")
-        
-        # Força Maximização de Tela
-        try: self.root.state('zoomed')
-        except: self.root.attributes('-zoomed', True)
+app = Flask(__name__)
+app.secret_key = 'chave_super_secreta_da_postal_saude'
 
-        setup_db()
-        self.current_user = None
-        self.current_role = None
-        
-        self.container = tk.Frame(self.root, bg="#f4f4f9")
-        self.container.pack(fill=tk.BOTH, expand=True)
-        
-        # Mapeamento de todas as telas mestres do sistema (Importadas)
-        self.frames = {
-            "Login": LoginFrame(self.container, self),
-            "Portal": PortalFrame(self.container, self),
-            "ControleDemandas": ControleDemandasFrame(self.container, self),
-            "PenteFino": PenteFinoFrame(self.container, self),
-            "Admin": AdminFrame(self.container, self)
-        }
-        self.show_frame("Login")
+# Garante que o banco está criado quando o app liga
+setup_db()
 
-    def show_frame(self, page_name):
-        for frame in self.frames.values():
-            frame.pack_forget()
-        frame = self.frames[page_name]
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Atualiza os dados da tela antes de mostrar
-        if hasattr(frame, "refresh_all"): 
-            frame.refresh_all()
-            
-        if page_name == "Login": 
-            frame.focus_login()
+# ==========================================
+# CÓDIGOS HTML/CSS EMBUTIDOS (FULL PYTHON)
+# ==========================================
 
+TELA_LOGIN = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Postal Saúde COCAP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .login-card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px; }
+        .btn-postal { background-color: #004b87; color: white; font-weight: bold; }
+        .btn-postal:hover { background-color: #003666; color: white; }
+    </style>
+</head>
+<body>
+<div class="login-card">
+    <div class="text-center mb-4">
+        <h3 style="color: #004b87; font-weight: 800;">POSTAL SAÚDE</h3>
+        <p class="text-muted">Central de Operações (COCAP)</p>
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    <form method="POST" action="/">
+        <div class="mb-3">
+            <label class="form-label font-weight-bold">Usuário</label>
+            <input type="text" name="username" class="form-control" placeholder="Digite seu usuário" required>
+        </div>
+        <div class="mb-4">
+            <label class="form-label font-weight-bold">Senha</label>
+            <input type="password" name="password" class="form-control" placeholder="Digite sua senha" required>
+        </div>
+        <button type="submit" class="btn btn-postal w-100 py-2">Entrar no Sistema</button>
+    </form>
+</div>
+</body>
+</html>
+"""
 
-# ---------------------------------------------------------
-# Telas Simples (Login e Portal) embutidas no Main
-# ---------------------------------------------------------
-class LoginFrame(tk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent, bg="#f4f4f9")
-        self.controller = controller
-        
-        fl = tk.Frame(self, bg="#ffffff", padx=40, pady=40, relief=tk.RAISED, bd=2)
-        fl.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-        
-        tk.Label(fl, text="LOGIN DO SISTEMA", font=("Helvetica", 16, "bold"), bg="#ffffff").pack(pady=(0, 20))
-        tk.Label(fl, text="Usuário:", font=("Helvetica", 10), bg="#ffffff").pack(anchor=tk.W)
-        self.entry_user = ttk.Entry(fl, width=30)
-        self.entry_user.pack(pady=(0, 15))
-        
-        tk.Label(fl, text="Senha:", font=("Helvetica", 10), bg="#ffffff").pack(anchor=tk.W)
-        self.entry_pass = ttk.Entry(fl, width=30, show="*")
-        self.entry_pass.pack(pady=(0, 20))
-        
-        tk.Button(fl, text="Entrar", command=self.fazer_login, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"), relief=tk.FLAT, pady=5).pack(fill=tk.X)
-        
-        self.entry_user.bind("<Return>", lambda event: self.entry_pass.focus())
-        self.entry_pass.bind("<Return>", lambda event: self.fazer_login())
+TELA_DASHBOARD = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Portal COCAP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body style="background-color: #f0f2f5;">
+<nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #004b87;">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="#">COCAP Web</a>
+    <div class="d-flex text-white align-items-center">
+      <span class="me-3">Olá, <strong>{{ user }}</strong> ({{ role }})</span>
+      <a href="/logout" class="btn btn-danger btn-sm">Sair</a>
+    </div>
+  </div>
+</nav>
 
-    def focus_login(self): 
-        self.entry_user.focus()
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <h1 style="color: #004b87; font-weight: 800;">PORTAL CENTRAL DE OPERAÇÕES</h1>
+        <p class="text-muted">Selecione o módulo desejado abaixo</p>
+    </div>
 
-    def fazer_login(self):
-        user = self.entry_user.get()
-        password = self.entry_pass.get()
+    <div class="row justify-content-center gap-4">
+        <div class="col-md-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body text-center p-5">
+                    <h1 class="card-title text-info mb-3">📊</h1>
+                    <h4 class="card-title mb-3">Controle de Demandas</h4>
+                    <p class="card-text text-muted mb-4">Gerencie Rotinas, PDFs, Avulsas e acesse o Dashboard Gerencial.</p>
+                    <button class="btn btn-info text-white w-100 fw-bold">Acessar Módulo</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body text-center p-5">
+                    <h1 class="card-title text-warning mb-3">🏥</h1>
+                    <h4 class="card-title mb-3">Pente Fino (RN 665)</h4>
+                    <p class="card-text text-muted mb-4">Substituição de Prestadores, cruzamento regional e busca sniper.</p>
+                    <button class="btn btn-warning text-white w-100 fw-bold">Acessar Módulo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+"""
+
+# ==========================================
+# ROTAS DO SERVIDOR WEB
+# ==========================================
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form.get('username')
+        password = request.form.get('password')
+        
         conn = conectar_db()
+        if not conn:
+            flash("Erro de conexão com o banco de dados da nuvem.", "danger")
+            return render_template_string(TELA_LOGIN)
+            
         c = conn.cursor()
-        c.execute("SELECT id, role, first_login FROM users WHERE username=%s AND password=%s" if "psycopg2" in str(type(conn)) else "SELECT id, role, first_login FROM users WHERE username=? AND password=?", (user, password))
+        c.execute("SELECT id, role, first_login FROM users WHERE username=%s AND password=%s", (user, password))
         res = c.fetchone()
         conn.close()
         
         if res:
-            if res[2] == 1: 
-                self.forcar_troca_senha(res[0], user, res[1])
-            else: 
-                self.concluir_login(user, res[1])
-        else: 
-            messagebox.showerror("Erro", "Usuário ou senha incorretos!")
-
-    def forcar_troca_senha(self, uid, u, r):
-        m = tk.Toplevel(self)
-        m.title("Mudar Senha")
-        m.geometry("400x300")
-        m.configure(bg="#f4f4f9")
-        m.transient(self.controller.root)
-        m.grab_set()
-        
-        tk.Label(m, text="Bem-vindo! Este é seu primeiro acesso.\nDefina uma nova senha.", font=("Helvetica", 11, "bold"), bg="#f4f4f9", pady=20).pack()
-        tk.Label(m, text="Nova Senha:", bg="#f4f4f9").pack(anchor=tk.W, padx=50)
-        en = ttk.Entry(m, show="*", width=30)
-        en.pack(pady=(0, 15))
-        
-        tk.Label(m, text="Confirmar Senha:", bg="#f4f4f9").pack(anchor=tk.W, padx=50)
-        ec = ttk.Entry(m, show="*", width=30)
-        ec.pack(pady=(0, 20))
-        
-        def salvar():
-            if not en.get() or not ec.get(): 
-                return messagebox.showwarning("Aviso", "Preencha tudo.")
-            if en.get() != ec.get(): 
-                return messagebox.showerror("Erro", "Senhas não coincidem!")
-                
-            conn = conectar_db()
-            c = conn.cursor()
-            query = "UPDATE users SET password=%s, first_login=0 WHERE id=%s" if "psycopg2" in str(type(conn)) else "UPDATE users SET password=?, first_login=0 WHERE id=?"
-            c.execute(query, (en.get(), uid))
-            conn.commit()
-            conn.close()
+            session['user'] = user
+            session['role'] = res[1]
+            return redirect(url_for('dashboard'))
+        else:
+            flash("Usuário ou senha incorretos!", "danger")
             
-            messagebox.showinfo("Sucesso", "Senha atualizada!")
-            m.destroy()
-            self.concluir_login(u, r)
-            
-        tk.Button(m, text="Salvar", command=salvar, bg="#4CAF50", fg="white", font=("Helvetica", 10, "bold"), relief=tk.FLAT).pack()
+    return render_template_string(TELA_LOGIN)
 
-    def concluir_login(self, u, r):
-        self.controller.current_user = u
-        self.controller.current_role = r
-        self.entry_user.delete(0, tk.END)
-        self.entry_pass.delete(0, tk.END)
-        self.controller.show_frame("Portal")
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    return render_template_string(TELA_DASHBOARD, user=session['user'], role=session['role'])
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
-class PortalFrame(tk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent, bg="#f4f4f9")
-        self.controller = controller
-        
-        tb = tk.Frame(self, bg="#333", height=50)
-        tb.pack(fill=tk.X)
-        self.lui = tk.Label(tb, text="", bg="#333", fg="white", font=("Helvetica", 10, "bold"))
-        self.lui.pack(side=tk.LEFT, padx=20, pady=10)
-        tk.Button(tb, text="Sair do Sistema", command=self.logout, bg="#d9534f", fg="white", relief=tk.FLAT).pack(side=tk.RIGHT, padx=20, pady=10)
-        
-        tk.Label(self, text="PORTAL CENTRAL DE OPERAÇÕES", font=("Segoe UI", 24, "bold"), bg="#f4f4f9", fg="#004b87").pack(pady=(80, 40))
-        
-        mc = tk.Frame(self, bg="#f4f4f9")
-        mc.pack()
-        
-        tk.Button(mc, text="📊 SISTEMA DE CONTROLE DE DEMANDAS", command=lambda: self.controller.show_frame("ControleDemandas"), bg="#008CBA", fg="white", font=("Segoe UI", 16, "bold"), relief=tk.FLAT, width=45, pady=20).pack(pady=15)
-        tk.Button(mc, text="🏥 SUBSTITUIÇÃO DE PRESTADORES (RN 665)", command=lambda: self.controller.show_frame("PenteFino"), bg="#f0ad4e", fg="white", font=("Segoe UI", 16, "bold"), relief=tk.FLAT, width=45, pady=20).pack(pady=15)
-        
-        self.ba = tk.Button(mc, text="⚙️ PAINEL ADMINISTRATIVO (Usuários)", command=lambda: self.controller.show_frame("Admin"), bg="#333333", fg="white", font=("Segoe UI", 14, "bold"), relief=tk.FLAT, width=45, pady=15)
-
-    def refresh_all(self):
-        self.lui.config(text=f"Usuário Logado: {self.controller.current_user} | Nível: {self.controller.current_role.upper()}")
-        if self.controller.current_role == 'admin': 
-            self.ba.pack(pady=15)
-        else: 
-            self.ba.pack_forget()
-
-    def logout(self): 
-        self.controller.current_user = None
-        self.controller.current_role = None
-        self.controller.show_frame("Login")
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = AppGestaoDemandas(root)
-    root.mainloop()
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
