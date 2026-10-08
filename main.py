@@ -143,7 +143,6 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
 <div class="container-fluid mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     
-    <!-- Filtros de Pesquisa -->
     <div class="card shadow-sm mb-3 border-0 bg-light">
         <div class="card-body py-2">
             <form method="GET" action="/demandas/avulsas" class="row g-2 align-items-center">
@@ -155,7 +154,6 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
         </div>
     </div>
 
-    <!-- Cadastro -->
     <div class="card shadow-sm mb-4 border-0">
         <div class="card-body">
             <form method="POST" action="/demandas/avulsas"><input type="hidden" name="acao" value="nova">
@@ -169,7 +167,6 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
             </form>
         </div>
     </div>
-    <!-- Tabela -->
     <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em;">
             <thead class="table-dark"><tr><th>ID</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
@@ -194,7 +191,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
 <div class="container-fluid mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
 
-    <!-- Filtros de Pesquisa -->
     <div class="card shadow-sm mb-3 border-0 bg-light">
         <div class="card-body py-2">
             <form method="GET" action="/demandas/rotinas" class="row g-2 align-items-center">
@@ -206,7 +202,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
         </div>
     </div>
 
-    <!-- Upload -->
     <div class="card shadow-sm mb-4 border-0">
         <div class="card-body text-center bg-light rounded">
             <form method="POST" action="/demandas/rotinas/upload" enctype="multipart/form-data" class="d-flex justify-content-center align-items-center gap-3">
@@ -216,7 +211,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             </form>
         </div>
     </div>
-    <!-- Tabela -->
     <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em;">
             <thead class="table-dark"><tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
@@ -265,7 +259,9 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+# TELA COM JAVASCRIPT (SHEETJS) INJETADO PARA LER CABEÇALHOS ANTES DO UPLOAD
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
@@ -277,19 +273,19 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                 <div class="row mb-3 bg-light p-3 rounded">
                     <div class="col-md-6 border-end">
                         <label class="form-label fw-bold text-primary">1. Base Postal Saúde</label>
-                        <input type="file" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
-                        <label class="form-label small">Nome da Coluna: Tipo Prestador</label>
-                        <input type="text" name="col_tipo_pos" class="form-control form-control-sm mb-2" value="TIPO PRESTADOR">
-                        <label class="form-label small">Nome da Coluna: Especialidade</label>
-                        <input type="text" name="col_esp_pos" class="form-control form-control-sm" value="ESPECIALIDADE">
+                        <input type="file" id="f_postal" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="lerCabecalho(this, 'col_tipo_pos', 'col_esp_pos')">
+                        <label class="form-label small">Coluna: Tipo Prestador</label>
+                        <select id="col_tipo_pos" name="col_tipo_pos" class="form-select form-select-sm mb-2"><option value="TIPO PRESTADOR">TIPO PRESTADOR</option></select>
+                        <label class="form-label small">Coluna: Especialidade</label>
+                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm"><option value="ESPECIALIDADE">ESPECIALIDADE</option></select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-success">2. Base Operadora Intermediária</label>
-                        <input type="file" name="f_op" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
-                        <label class="form-label small">Nome da Coluna: Tipo Prestador</label>
-                        <input type="text" name="col_tipo_op" class="form-control form-control-sm mb-2" value="TIPO PRESTADOR">
-                        <label class="form-label small">Nome da Coluna: Especialidade</label>
-                        <input type="text" name="col_esp_op" class="form-control form-control-sm" value="ESPECIALIDADE">
+                        <input type="file" id="f_op" name="f_op" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="lerCabecalho(this, 'col_tipo_op', 'col_esp_op')">
+                        <label class="form-label small">Coluna: Tipo Prestador</label>
+                        <select id="col_tipo_op" name="col_tipo_op" class="form-select form-select-sm mb-2"><option value="TIPO PRESTADOR">TIPO PRESTADOR</option></select>
+                        <label class="form-label small">Coluna: Especialidade</label>
+                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm"><option value="ESPECIALIDADE">ESPECIALIDADE</option></select>
                     </div>
                 </div>
                 <div class="mb-4 text-center">
@@ -300,7 +296,32 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
             </form>
         </div>
     </div>
-</div></body></html>"""
+</div>
+<script>
+function lerCabecalho(input, selectId1, selectId2) {
+    if (!input.files || input.files.length === 0) return;
+    let file = input.files[0];
+    let reader = new FileReader();
+    reader.onload = function(e) {
+        let data = new Uint8Array(e.target.result);
+        let workbook = XLSX.read(data, {type: 'array'});
+        let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        let headers = XLSX.utils.sheet_to_json(firstSheet, {header: 1})[0];
+        if(headers) {
+            let s1 = document.getElementById(selectId1); let s2 = document.getElementById(selectId2);
+            s1.innerHTML = ''; s2.innerHTML = '';
+            headers.forEach(h => {
+                let text = (h || '').toString().trim().toUpperCase();
+                if(text) {
+                    s1.options.add(new Option(text, text)); s2.options.add(new Option(text, text));
+                }
+            });
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+</script>
+</body></html>"""
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -728,7 +749,6 @@ def pentefino_regional():
 
         df_postal, df_operadora = dics_processados[0], dics_processados[1]
 
-        # MAPEAMENTO VIA INPUT DO UTILIZADOR OU CAÇADOR AUTOMÁTICO
         v_tipo_pos = request.form.get('col_tipo_pos', '').strip().upper()
         v_esp_pos = request.form.get('col_esp_pos', '').strip().upper()
         v_tipo_op = request.form.get('col_tipo_op', '').strip().upper()
@@ -815,7 +835,7 @@ def pentefino_individual():
     try:
         f_postal = request.files.get('f_postal'); f_ibge = request.files.get('f_ibge')
         
-        # BUSCA INTELIGENTE: PODE SER NOME OU CNPJ
+        # BUSCA INTELIGENTE: NOME OU CNPJ
         alvo_bruto = request.form.get('alvo', '').strip().upper()
         filtro_tipo = request.form.get('filtro_tipo', '').strip().upper()
         
@@ -834,18 +854,20 @@ def pentefino_individual():
         if not col_cnpj_ind or not col_nome_ind:
             flash("Colunas básicas (Nome/CNPJ) não encontradas na base da Postal.", "danger"); return redirect(url_for('pentefino_individual'))
             
+        # Converte a coluna de CNPJ para string e remove não números para facilitar a busca
         df_ind[col_cnpj_ind] = df_ind[col_cnpj_ind].astype(str).str.replace(r'\D', '', regex=True)
         
-        # O MOTOR DE BUSCA (NOME OU CNPJ)
+        # MOTOR DE BUSCA SNIPER (Nome ou CNPJ)
         alvo_numeros = re.sub(r'\D', '', alvo_bruto)
-        mask = df_ind[col_nome_ind].fillna('').str.upper().str.contains(alvo_bruto)
-        if len(alvo_numeros) > 3: mask = mask | df_ind[col_cnpj_ind].str.contains(alvo_numeros)
+        # Cria uma máscara verificando se o alvo_bruto está no Nome OU se o alvo_numeros está no CNPJ
+        mask = df_ind[col_nome_ind].fillna('').astype(str).str.upper().str.contains(alvo_bruto, na=False)
+        if len(alvo_numeros) > 3: 
+            mask = mask | (df_ind[col_cnpj_ind].str.contains(alvo_numeros, na=False))
         
         linhas_alvo = df_ind[mask]
         if linhas_alvo.empty:
             flash(f"O Alvo '{alvo_bruto}' não foi encontrado na base.", "danger"); return redirect(url_for('pentefino_individual'))
             
-        # Pega o primeiro que encontrou e usa como base
         row_alvo = linhas_alvo.iloc[0]
         cnpj_alvo = str(row_alvo.get(col_cnpj_ind, '')).strip()
         nome_alvo_real = str(row_alvo.get(col_nome_ind, '')).strip()
@@ -854,6 +876,8 @@ def pentefino_individual():
         if col_esp_ind: dict_agg[col_esp_ind] = lambda s: ", ".join(sorted(list(extrair_especialidades(s))))
         if col_tipo_ind: dict_agg[col_tipo_ind] = lambda x: " | ".join(x.dropna().astype(str).unique())
         group_cols = [c for c in [col_cnpj_ind, col_nome_ind, col_mun_ind, col_uf_ind, col_ibge_ind] if c]
+        
+        # Agrupamento para remover duplicatas
         df_ind = df_ind.groupby(group_cols, dropna=False).agg(dict_agg).reset_index()
 
         c_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); c_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
