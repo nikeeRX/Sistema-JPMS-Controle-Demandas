@@ -1,6 +1,7 @@
+Flask
+psycopg2-binary
 pandas
 openpyxl
 PyPDF2
 matplotlib
-psycopg2-binary
-python-dotenv
+gunicorn
