@@ -11,7 +11,6 @@ import unicodedata
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
-# Configuração CRÍTICA para o Matplotlib rodar em servidores Web (Sem ecrã)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -19,15 +18,13 @@ import matplotlib.pyplot as plt
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta_da_postal_saude'
 
-# Inicia o banco de dados
 setup_db()
 
-# Função auxiliar para compatibilidade entre Postgres e SQLite
 def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
 # ==========================================
-# LISTAS GLOBAIS E CONSTANTES (PENTE FINO)
+# LISTAS GLOBAIS E CONSTANTES
 # ==========================================
 TIPOS_ROTINA = ["Reajuste", "Novo Contrato", "Inclusão", "Exclusão", "Ajuste", "Extensão", "Descredenciamento", "Não Identificada"]
 TIPOS_AVULSA = ['Credenciamento', 'Descredenciamento', 'Análise de Vulnerabilidade', 'Parametrização', 'Resposta de E-mail', 'RPS', 'Lote de Erros', 'Atendimento de Chamado', 'Atualização Cadastral', 'Outro']
@@ -41,142 +38,61 @@ DE_PARA = {"MEDICO HEMOTERAPEUTA": "HEMATOLOGIA E HEMOTERAPIA", "GENETICA MEDICA
 # CÓDIGOS HTML EMBUTIDOS
 # ==========================================
 
-TELA_LOGIN = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - COCAP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .login-card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px; }
-        .btn-postal { background-color: #004b87; color: white; font-weight: bold; }
-        .btn-postal:hover { background-color: #003666; color: white; }
-    </style>
-</head>
-<body>
-<div class="login-card">
-    <div class="text-center mb-4">
-        <h3 style="color: #004b87; font-weight: 800;">POSTAL SAÚDE</h3>
-        <p class="text-muted">Central de Operações (COCAP)</p>
-    </div>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+TELA_LOGIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Login - COCAP</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body style="background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh;">
+<div style="border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px;">
+    <div class="text-center mb-4"><h3 style="color: #004b87; font-weight: 800;">POSTAL SAÚDE</h3><p class="text-muted">Central de Operações (COCAP)</p></div>
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     <form method="POST" action="/">
-        <div class="mb-3">
-            <label class="form-label font-weight-bold">Utilizador</label>
-            <input type="text" name="username" class="form-control" required>
-        </div>
-        <div class="mb-4">
-            <label class="form-label font-weight-bold">Senha</label>
-            <input type="password" name="password" class="form-control" required>
-        </div>
-        <button type="submit" class="btn btn-postal w-100 py-2">Entrar no Sistema</button>
+        <div class="mb-3"><label class="form-label fw-bold">Utilizador</label><input type="text" name="username" class="form-control" required></div>
+        <div class="mb-4"><label class="form-label fw-bold">Senha</label><input type="password" name="password" class="form-control" required></div>
+        <button type="submit" class="btn w-100 py-2" style="background-color: #004b87; color: white; font-weight: bold;">Entrar no Sistema</button>
     </form>
-</div>
-</body>
-</html>
-"""
+</div></body></html>"""
 
-TELA_DASHBOARD = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Portal COCAP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Portal COCAP</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #004b87;">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="#">COCAP Web</a>
-    <div class="d-flex text-white align-items-center">
-      <span class="me-3">Olá, <strong>{{ user }}</strong> ({{ role }})</span>
-      <a href="/logout" class="btn btn-danger btn-sm">Sair</a>
-    </div>
+  <div class="container-fluid"><a class="navbar-brand fw-bold" href="#">COCAP Web</a>
+    <div class="d-flex text-white align-items-center"><span class="me-3">Olá, <strong>{{ user }}</strong> ({{ role }})</span><a href="/logout" class="btn btn-danger btn-sm">Sair</a></div>
   </div>
 </nav>
-
 <div class="container mt-5 text-center">
     <h1 style="color: #004b87; font-weight: 800; margin-bottom: 2rem;">PORTAL CENTRAL DE OPERAÇÕES</h1>
     <div class="row justify-content-center gap-4">
         <div class="col-md-5">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1>
-                <h4>Controlo de Demandas</h4>
-                <p class="text-muted mb-4">Gira Rotinas, PDFs, Avulsas e aceda ao Dashboard.</p>
+                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controlo de Demandas</h4><p class="text-muted mb-4">Gira Rotinas, PDFs, Avulsas e aceda ao Dashboard.</p>
                 <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2">Aceder ao Módulo</a>
             </div>
         </div>
         <div class="col-md-5">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1>
-                <h4>Pente Fino (RN 665)</h4>
-                <p class="text-muted mb-4">Substituição de Prestadores e análise de vulnerabilidade de rede.</p>
+                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1><h4>Pente Fino (RN 665)</h4><p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
                 <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2">Aceder ao Módulo</a>
             </div>
         </div>
     </div>
-    {% if role == 'admin' %}
-    <div class="row justify-content-center mt-4">
-        <div class="col-md-5">
-            <a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Utilizadores)</a>
-        </div>
-    </div>
-    {% endif %}
-</div>
-</body>
-</html>
-"""
+    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-5"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Utilizadores)</a></div></div>{% endif %}
+</div></body></html>"""
 
-TELA_ADMIN = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Painel Administrativo</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel Administrativo</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark" style="background-color: #333;">
-  <div class="container-fluid">
-    <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a>
-    <span class="navbar-text text-white fw-bold">Painel Administrativo: BD e Utilizadores</span>
-  </div>
-</nav>
-
+<nav class="navbar navbar-dark" style="background-color: #333;"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Painel Administrativo</span></div></nav>
 <div class="container mt-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     <div class="row">
-        <!-- ÁREA DE BANCO DE DADOS -->
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-dark text-white fw-bold">💾 Gestão da Base de Dados</div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-6 border-end">
-                            <h5 class="text-success">Exportar Backup</h5>
-                            <p class="text-muted small">Descarregue um ficheiro Excel com todas as demandas e utilizadores.</p>
-                            <a href="/admin/exportar" class="btn btn-success fw-bold w-75">⬇ Descarregar Backup (Excel)</a>
+                            <h5 class="text-success">Exportar Backup</h5><a href="/admin/exportar" class="btn btn-success fw-bold w-75 mt-2">⬇ Descarregar Backup (Excel)</a>
                         </div>
                         <div class="col-md-6">
                             <h5 class="text-danger">Restaurar ou Migrar Base de Dados</h5>
-                            <p class="text-muted small">Faça upload do Excel (.xlsx) ou da Base de Dados Antiga (.db)</p>
-                            <form action="/admin/importar" method="POST" enctype="multipart/form-data" class="d-flex flex-column align-items-center">
+                            <form action="/admin/importar" method="POST" enctype="multipart/form-data" class="d-flex flex-column align-items-center mt-2">
                                 <input type="file" name="file_backup" class="form-control form-control-sm w-75 mb-2" accept=".xlsx,.db" required>
                                 <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações atuais da Nuvem serão APAGADAS e substituídas por este ficheiro. Deseja continuar?');">⬆ Importar Ficheiro</button>
                             </form>
@@ -185,140 +101,64 @@ TELA_ADMIN = """
                 </div>
             </div>
         </div>
-
-        <!-- ÁREA DE UTILIZADORES -->
         <div class="col-md-12">
             <div class="card shadow-sm mb-4 border-0">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Criar Novo Utilizador</h5>
-                    <form method="POST" action="/admin">
-                        <input type="hidden" name="acao" value="adicionar">
+                <div class="card-body"><h5 class="card-title mb-3">Criar Novo Utilizador</h5>
+                    <form method="POST" action="/admin"><input type="hidden" name="acao" value="adicionar">
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Utilizador</label>
-                                <input type="text" name="username" class="form-control" required>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Senha</label>
-                                <input type="password" name="password" class="form-control" required>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Nível</label>
-                                <select name="role" class="form-select">
-                                    <option value="user">User</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button type="submit" class="btn btn-primary w-100 fw-bold">Gravar</button>
-                            </div>
+                            <div class="col-md-4"><label class="form-label small fw-bold">Utilizador</label><input type="text" name="username" class="form-control" required></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Senha</label><input type="password" name="password" class="form-control" required></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Nível</label><select name="role" class="form-select"><option value="user">User</option><option value="admin">Admin</option></select></div>
+                            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100 fw-bold">Gravar</button></div>
                         </div>
                     </form>
                 </div>
             </div>
-
             <div class="card shadow-sm border-0">
                 <div class="card-body">
-                    <h5 class="card-title mb-3">Lista de Utilizadores</h5>
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-light">
-                                <tr><th>ID</th><th>Utilizador</th><th>Nível</th><th>Ações</th></tr>
-                            </thead>
-                            <tbody>
-                                {% for u in usuarios %}
-                                <tr>
-                                    <td>{{ u[0] }}</td>
-                                    <td>{{ u[1] }}</td>
-                                    <td><span class="badge bg-{{ 'dark' if u[2] == 'admin' else 'secondary' }}">{{ u[2] | upper }}</span></td>
-                                    <td>
-                                        {% if u[1] != 'admin' and u[1] != user %}
-                                        <form method="POST" action="/admin" style="display:inline;">
-                                            <input type="hidden" name="acao" value="eliminar">
-                                            <input type="hidden" name="user_id" value="{{ u[0] }}">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Eliminar o utilizador {{ u[1] }}?');">Excluir</button>
-                                        </form>
-                                        {% else %}
-                                        <span class="text-muted small">Sistema</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                    <table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>Utilizador</th><th>Nível</th><th>Ações</th></tr></thead>
+                        <tbody>{% for u in usuarios %}<tr><td>{{ u[0] }}</td><td>{{ u[1] }}</td><td><span class="badge bg-{{ 'dark' if u[2] == 'admin' else 'secondary' }}">{{ u[2] | upper }}</span></td><td>
+                            {% if u[1] != 'admin' and u[1] != user %}<form method="POST" action="/admin" style="display:inline;"><input type="hidden" name="acao" value="eliminar"><input type="hidden" name="user_id" value="{{ u[0] }}"><button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Eliminar o utilizador {{ u[1] }}?');">Excluir</button></form>
+                            {% else %}<span class="text-muted small">Sistema</span>{% endif %}</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
-</div>
-</body>
-</html>
-"""
+</div></body></html>"""
 
-TELA_HUB_DEMANDAS = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <title>Módulo de Demandas</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de Demandas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a>
-    <span class="navbar-text text-white fw-bold">Gestão de Demandas</span>
-  </div>
-</nav>
-<div class="container mt-5 text-center">
-    <div class="row justify-content-center">
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4">
-                <h1 class="mb-3">📄</h1>
-                <a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold fs-6">Demandas de Rotina (PDFs)</a>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4">
-                <h1 class="mb-3">📝</h1>
-                <a href="/demandas/avulsas" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Demandas Avulsas</a>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4">
-                <h1 class="mb-3">📊</h1>
-                <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold fs-6">Dashboard Gerencial</a>
-            </div>
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Gestão de Demandas</span></div></nav>
+<div class="container mt-5 text-center"><div class="row justify-content-center">
+    <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📄</h1><a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold fs-6">Demandas de Rotina (PDFs)</a></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📝</h1><a href="/demandas/avulsas" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Demandas Avulsas</a></div></div>
+    <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📊</h1><a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold fs-6">Dashboard Gerencial</a></div></div>
+</div></div></body></html>"""
+
+TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body style="background-color: #f0f2f5;">
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Demandas Avulsas</span></div></nav>
+<div class="container-fluid mt-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+    
+    <!-- Filtros de Pesquisa -->
+    <div class="card shadow-sm mb-3 border-0 bg-light">
+        <div class="card-body py-2">
+            <form method="GET" action="/demandas/avulsas" class="row g-2 align-items-center">
+                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option>{% for s in status_list %}<option value="{{s}}">{{s}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}">{{t}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><button type="submit" class="btn btn-secondary btn-sm w-100 fw-bold">🔍 Filtrar Resultados</button></div>
+            </form>
         </div>
     </div>
-</div>
-</body>
-</html>
-"""
 
-TELA_AVULSAS = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <title>Demandas Avulsas</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Demandas Avulsas</span></div>
-</nav>
-
-<div class="container-fluid mt-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}
-      {% endif %}
-    {% endwith %}
-
+    <!-- Cadastro -->
     <div class="card shadow-sm mb-4 border-0">
         <div class="card-body">
-            <form method="POST" action="/demandas/avulsas">
-                <input type="hidden" name="acao" value="nova">
+            <form method="POST" action="/demandas/avulsas"><input type="hidden" name="acao" value="nova">
                 <div class="row g-2">
                     <div class="col-md-2"><select name="tipo" class="form-select" required><option value="">Tipo...</option>{% for t in tipos %}<option value="{{t}}">{{t}}</option>{% endfor %}</select></div>
                     <div class="col-md-3"><input type="text" name="assunto" class="form-control" placeholder="Assunto/Demanda" required></div>
@@ -329,112 +169,75 @@ TELA_AVULSAS = """
             </form>
         </div>
     </div>
+    <!-- Tabela -->
+    <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
+        <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em;">
+            <thead class="table-dark"><tr><th>ID</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
+            <tbody>{% for d in demandas %}<tr>
+                <td>{{ d[0] }}</td><td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
+                <td><span class="badge bg-{{ 'warning text-dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'info' }}">{{ d[6] }}</span></td>
+                <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
+                <td>
+                    <form method="POST" action="/demandas/avulsas" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
+                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>Assumir</button>
+                        <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>✔</button>
+                    </form>
+                </td>
+            </tr>{% endfor %}</tbody>
+        </table>
+    </div></div></div>
+</div></body></html>"""
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em;">
-                    <thead class="table-dark">
-                        <tr><th>ID</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Responsável</th><th>Conclusão</th><th>Ações</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for d in demandas %}
-                        <tr>
-                            <td>{{ d[0] }}</td><td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
-                            <td><span class="badge bg-{{ 'warning text-dark' if d[6]=='Pendente' else 'success' if d[6]=='Concluído' else 'info' }}">{{ d[6] }}</span></td>
-                            <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
-                            <td>
-                                <form method="POST" action="/demandas/avulsas" style="display:inline;">
-                                    <input type="hidden" name="id" value="{{ d[0] }}">
-                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>Assumir</button>
-                                    <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>✔</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-</body>
-</html>
-"""
-
-TELA_ROTINAS = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <title>Rotinas (PDFs)</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Processamento de PDFs</span></div>
-</nav>
-
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Processamento de PDFs</span></div></nav>
 <div class="container-fluid mt-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}
-      {% endif %}
-    {% endwith %}
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
 
-    <div class="card shadow-sm mb-4 border-0">
-        <div class="card-body text-center bg-light rounded">
-            <h5 class="card-title text-primary mb-3">Importar Múltiplos PDFs</h5>
-            <form method="POST" action="/demandas/rotinas/upload" enctype="multipart/form-data">
-                <input type="file" name="pdfs" class="form-control mb-3 w-50 mx-auto" multiple accept=".pdf" required>
-                <button type="submit" class="btn btn-primary fw-bold px-5">Processar Ficheiros</button>
+    <!-- Filtros de Pesquisa -->
+    <div class="card shadow-sm mb-3 border-0 bg-light">
+        <div class="card-body py-2">
+            <form method="GET" action="/demandas/rotinas" class="row g-2 align-items-center">
+                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option><option value="Pendente">Pendente</option><option value="Em Análise">Em Análise</option><option value="Finalizada">Finalizada</option></select></div>
+                <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}">{{t}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><button type="submit" class="btn btn-secondary btn-sm w-100 fw-bold">🔍 Filtrar Resultados</button></div>
             </form>
         </div>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em;">
-                    <thead class="table-dark">
-                        <tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for d in rotinas %}
-                        <tr>
-                            <td>{{ d[0] }}</td><td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
-                            <td><span class="badge bg-{{ 'warning text-dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
-                            <td>{{ d[4] }}</td>
-                            <td>
-                                <form method="POST" action="/demandas/rotinas/acao" style="display:inline;">
-                                    <input type="hidden" name="id" value="{{ d[0] }}">
-                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Assumir</button>
-                                    <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Finalizar</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <!-- Upload -->
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body text-center bg-light rounded">
+            <form method="POST" action="/demandas/rotinas/upload" enctype="multipart/form-data" class="d-flex justify-content-center align-items-center gap-3">
+                <span class="text-primary fw-bold">Importar PDFs:</span>
+                <input type="file" name="pdfs" class="form-control w-25" multiple accept=".pdf" required>
+                <button type="submit" class="btn btn-primary fw-bold px-4">Processar Ficheiros</button>
+            </form>
         </div>
     </div>
-</div>
-</body>
-</html>
-"""
+    <!-- Tabela -->
+    <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
+        <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em;">
+            <thead class="table-dark"><tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
+            <tbody>{% for d in rotinas %}<tr>
+                <td>{{ d[0] }}</td><td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
+                <td><span class="badge bg-{{ 'warning text-dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
+                <td>{{ d[4] }}</td>
+                <td>
+                    <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
+                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Assumir</button>
+                        <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Finalizar</button>
+                    </form>
+                </td>
+            </tr>{% endfor %}</tbody>
+        </table>
+    </div></div></div>
+</div></body></html>"""
 
-TELA_DASHBOARD_GRAFICOS = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <title>Dashboard Gerencial</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dashboard Gerencial</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Dashboard Geral</span></div>
-</nav>
-
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Dashboard Geral</span></div></nav>
 <div class="container mt-4">
     <div class="row text-center mb-4">
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-primary text-white p-3"><h5 class="mb-1">Total Demandas</h5><h2 class="fw-bold">{{ d_total }}</h2></div></div>
@@ -442,31 +245,13 @@ TELA_DASHBOARD_GRAFICOS = """
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-info text-white p-3"><h5 class="mb-1">Em Análise</h5><h2 class="fw-bold">{{ d_ana }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
     </div>
-    
     <div class="row">
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm border-0 h-100"><div class="card-body text-center">
-                <h5 class="fw-bold text-secondary mb-3">Produtividade por Colaborador</h5>
-                <img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid rounded">
-            </div></div>
-        </div>
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm border-0 h-100"><div class="card-body text-center">
-                <h5 class="fw-bold text-secondary mb-3">Distribuição por Tipo de Demanda</h5>
-                <img src="data:image/png;base64,{{ chart_tipo }}" class="img-fluid rounded">
-            </div></div>
-        </div>
+        <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Produtividade por Colaborador</h5><img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid rounded"></div></div></div>
+        <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Distribuição por Tipo de Demanda</h5><img src="data:image/png;base64,{{ chart_tipo }}" class="img-fluid rounded"></div></div></div>
     </div>
-</div>
-</body>
-</html>
-"""
+</div></body></html>"""
 
-# HTML DO PENTE FINO (SUBSTITUIÇÃO DA TELA DE CONSTRUÇÃO)
-TELA_HUB_PENTEFINO = """
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head><title>Pente Fino RN 665</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fino RN 665</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Pente Fino (RN 665)</span></div></nav>
 <div class="container mt-5 text-center">
@@ -475,52 +260,72 @@ TELA_HUB_PENTEFINO = """
             <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-warning" style="font-size: 3rem;">🌍</h1><h4 class="fw-bold text-secondary">Cruzamento Regional em Massa</h4><p class="text-muted">Análise de cobertura completa comparando a Postal com a Operadora Intermediária.</p><a href="/pentefino/regional" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
         </div>
         <div class="col-md-5 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Selecione um único prestador alvo e procure substitutos internamente, incluindo análise do Pool Regional.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
+            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente usando Nome ou CNPJ.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
         </div>
     </div>
-</div>
-</body></html>
-"""
+</div></body></html>"""
 
-TELA_PENTEFINO_REGIONAL = """
-<!DOCTYPE html>
-<html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
-<div class="container mt-5">
+<div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     <div class="card shadow-sm border-0">
-        <div class="card-header bg-warning text-white fw-bold">🌍 Upload das Bases de Dados (Excel/CSV)</div>
+        <div class="card-header bg-warning text-white fw-bold">🌍 Mapeamento e Upload das Bases</div>
         <div class="card-body">
             <form method="POST" action="/pentefino/regional" enctype="multipart/form-data">
-                <div class="mb-3"><label class="form-label fw-bold">1. Base Postal Saúde</label><input type="file" name="f_postal" class="form-control" accept=".xlsx,.xls,.csv" required></div>
-                <div class="mb-3"><label class="form-label fw-bold">2. Base Operadora Intermediária (Piscina)</label><input type="file" name="f_op" class="form-control" accept=".xlsx,.xls,.csv" required></div>
-                <div class="mb-4"><label class="form-label fw-bold">3. Base Geográfica (IBGE)</label><input type="file" name="f_ibge" class="form-control" accept=".xlsx,.xls,.csv" required></div>
+                <div class="row mb-3 bg-light p-3 rounded">
+                    <div class="col-md-6 border-end">
+                        <label class="form-label fw-bold text-primary">1. Base Postal Saúde</label>
+                        <input type="file" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                        <label class="form-label small">Nome da Coluna: Tipo Prestador</label>
+                        <input type="text" name="col_tipo_pos" class="form-control form-control-sm mb-2" value="TIPO PRESTADOR">
+                        <label class="form-label small">Nome da Coluna: Especialidade</label>
+                        <input type="text" name="col_esp_pos" class="form-control form-control-sm" value="ESPECIALIDADE">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-success">2. Base Operadora Intermediária</label>
+                        <input type="file" name="f_op" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                        <label class="form-label small">Nome da Coluna: Tipo Prestador</label>
+                        <input type="text" name="col_tipo_op" class="form-control form-control-sm mb-2" value="TIPO PRESTADOR">
+                        <label class="form-label small">Nome da Coluna: Especialidade</label>
+                        <input type="text" name="col_esp_op" class="form-control form-control-sm" value="ESPECIALIDADE">
+                    </div>
+                </div>
+                <div class="mb-4 text-center">
+                    <label class="form-label fw-bold">3. Base Geográfica (IBGE)</label>
+                    <input type="file" name="f_ibge" class="form-control w-50 mx-auto" accept=".xlsx,.xls,.csv" required>
+                </div>
                 <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="this.innerHTML='A processar... Aguarde! Pode demorar alguns minutos.'; this.style.opacity='0.7';">Processar e Gerar Relatório Excel</button>
             </form>
         </div>
     </div>
-</div></body></html>
-"""
+</div></body></html>"""
 
-TELA_PENTEFINO_INDIVIDUAL = """
-<!DOCTYPE html>
-<html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Busca Individual (Sniper)</span></div></nav>
-<div class="container mt-5">
+<div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     <div class="card shadow-sm border-0">
         <div class="card-header bg-danger text-white fw-bold">🎯 Parâmetros de Substituição</div>
         <div class="card-body">
             <form method="POST" action="/pentefino/individual" enctype="multipart/form-data">
-                <div class="mb-3"><label class="form-label fw-bold">1. Base Postal Saúde</label><input type="file" name="f_postal" class="form-control" accept=".xlsx,.xls,.csv" required></div>
-                <div class="mb-4"><label class="form-label fw-bold">2. Base Geográfica (IBGE)</label><input type="file" name="f_ibge" class="form-control" accept=".xlsx,.xls,.csv" required></div>
+                <div class="row mb-3 bg-light p-3 rounded">
+                    <div class="col-md-6 border-end">
+                        <label class="form-label fw-bold text-primary">1. Base Postal Saúde</label>
+                        <input type="file" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-success">2. Base Geográfica (IBGE)</label>
+                        <input type="file" name="f_ibge" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                    </div>
+                </div>
                 <hr>
                 <div class="row mt-4">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold text-danger">CNPJ do Prestador Alvo (Somente números)</label>
-                        <input type="text" name="cnpj_alvo" class="form-control border-danger" placeholder="Ex: 13086053000119" required>
+                        <label class="form-label fw-bold text-danger">Pesquisar Alvo (Nome OU CNPJ)</label>
+                        <input type="text" name="alvo" class="form-control border-danger" placeholder="Ex: CLINICA SANTA HELENA ou 13086053000119" required>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Filtro de Tipo Prestador (Opcional)</label>
@@ -531,14 +336,12 @@ TELA_PENTEFINO_INDIVIDUAL = """
             </form>
         </div>
     </div>
-</div></body></html>
-"""
+</div></body></html>"""
 
 
 # ==========================================
 # FUNÇÕES DE APOIO PENTE FINO (PANDAS)
 # ==========================================
-
 def normalizar_texto(texto):
     if pd.isna(texto) or str(texto).lower() in ['nan', 'none', '']: return ""
     return ''.join(c for c in unicodedata.normalize('NFD', str(texto)) if unicodedata.category(c) != 'Mn').upper().strip()
@@ -574,8 +377,7 @@ def ler_arquivo(file_obj):
         except: 
             file_obj.seek(0)
             return pd.read_csv(file_obj, sep=',', encoding='utf-8', dtype=str)
-    else:
-        return pd.read_excel(file_obj, dtype=str)
+    else: return pd.read_excel(file_obj, dtype=str)
 
 
 # ==========================================
@@ -592,18 +394,15 @@ def login():
             flash("Erro de ligação com a base de dados.", "danger")
             return render_template_string(TELA_LOGIN)
             
-        c = conn.cursor()
-        ph = get_ph(conn)
+        c = conn.cursor(); ph = get_ph(conn)
         c.execute(f"SELECT id, role FROM users WHERE username={ph} AND password={ph}", (user, password))
         res = c.fetchone()
         conn.close()
         
         if res:
-            session['user'] = user
-            session['role'] = res[1]
+            session['user'] = user; session['role'] = res[1]
             return redirect(url_for('dashboard'))
-        else:
-            flash("Utilizador ou senha incorretos!", "danger")
+        else: flash("Utilizador ou senha incorretos!", "danger")
     return render_template_string(TELA_LOGIN)
 
 @app.route('/dashboard')
@@ -615,7 +414,6 @@ def dashboard():
 def logout():
     session.clear()
     return redirect(url_for('login'))
-
 
 # -------- ROTA: ADMINISTRAÇÃO & BANCO DE DADOS --------
 @app.route('/admin', methods=['GET', 'POST'])
@@ -630,16 +428,14 @@ def admin():
             try:
                 c.execute(f"INSERT INTO users (username, password, role, first_login) VALUES ({ph}, {ph}, {ph}, 1)", (u, p, r))
                 conn.commit(); flash(f"Utilizador '{u}' criado com sucesso!", "success")
-            except Exception:
-                conn.rollback(); flash("Erro: Nome de utilizador já existe!", "danger")
+            except Exception: conn.rollback(); flash("Erro: Nome de utilizador já existe!", "danger")
         elif acao == 'eliminar':
             uid = request.form.get('user_id')
             c.execute(f"DELETE FROM users WHERE id={ph}", (uid,))
             conn.commit(); flash("Utilizador excluído com sucesso!", "warning")
 
     c.execute("SELECT id, username, role, first_login FROM users ORDER BY id ASC")
-    usuarios = c.fetchall()
-    conn.close()
+    usuarios = c.fetchall(); conn.close()
     return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios)
 
 @app.route('/admin/exportar')
@@ -657,22 +453,18 @@ def exportar_backup():
             df_demands.to_excel(writer, sheet_name='Rotina_PDFs', index=False)
             df_avulsas.to_excel(writer, sheet_name='Demandas_Avulsas', index=False)
             df_users.to_excel(writer, sheet_name='Usuarios', index=False)
-        
         output.seek(0)
         nome_arquivo = f"Backup_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.xlsx"
         return send_file(output, download_name=nome_arquivo, as_attachment=True)
     except Exception as e:
-        flash(f"Erro ao gerar backup: {e}", "danger")
-        return redirect(url_for('admin'))
+        flash(f"Erro ao gerar backup: {e}", "danger"); return redirect(url_for('admin'))
 
 @app.route('/admin/importar', methods=['POST'])
 def importar_backup():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
-    
     file = request.files.get('file_backup')
     if not file:
-        flash("Nenhum ficheiro selecionado.", "danger")
-        return redirect(url_for('admin'))
+        flash("Nenhum ficheiro selecionado.", "danger"); return redirect(url_for('admin'))
         
     filename = file.filename.lower()
     if not (filename.endswith('.xlsx') or filename.endswith('.db')):
@@ -680,78 +472,48 @@ def importar_backup():
         return redirect(url_for('admin'))
         
     try:
-        conn = conectar_db(); c = conn.cursor()
-        is_postgres = "psycopg2" in str(type(conn))
-        
-        # 1. IMPORTAÇÃO DE EXCEL (.xlsx)
+        conn = conectar_db(); c = conn.cursor(); is_postgres = "psycopg2" in str(type(conn))
         if filename.endswith('.xlsx'):
-            xls = pd.ExcelFile(file)
-            sheets = xls.sheet_names
+            xls = pd.ExcelFile(file); sheets = xls.sheet_names
             mapeamento = {'Rotina_PDFs': 'demands', 'Demandas_Avulsas': 'demandas_avulsas', 'Usuarios': 'users'}
-            
             for aba, tabela in mapeamento.items():
                 if aba in sheets:
-                    df = pd.read_excel(xls, sheet_name=aba)
-                    c.execute(f"DELETE FROM {tabela}") 
+                    df = pd.read_excel(xls, sheet_name=aba); c.execute(f"DELETE FROM {tabela}") 
                     if not df.empty:
                         df = df.where(pd.notnull(df), None)
-                        cols = ", ".join(df.columns)
-                        placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
-                        q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
-                        c.executemany(q, df.values.tolist())
+                        cols = ", ".join(df.columns); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
+                        c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", df.values.tolist())
                         if is_postgres:
                             try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
                             except: pass
 
-        # 2. IMPORTAÇÃO NATIVA DO BANCO ANTIGO (.db)
         elif filename.endswith('.db'):
-            import sqlite3
-            import tempfile
-            
-            # Guarda o ficheiro numa pasta temporária segura no servidor (Railway)
-            temp_dir = tempfile.gettempdir()
-            temp_db = os.path.join(temp_dir, "temp_migration.db")
+            import sqlite3, tempfile
+            temp_db = os.path.join(tempfile.gettempdir(), "temp_migration.db")
             file.save(temp_db) 
-            
-            # Liga-se diretamente ao ficheiro SQLite nativo (Sem usar o Pandas)
-            sqlite_conn = sqlite3.connect(temp_db)
-            sqlite_c = sqlite_conn.cursor()
-            
-            tabelas_db = ['demands', 'demandas_avulsas', 'users']
-            for tabela in tabelas_db:
+            sqlite_conn = sqlite3.connect(temp_db); sqlite_c = sqlite_conn.cursor()
+            for tabela in ['demands', 'demandas_avulsas', 'users']:
                 try:
                     sqlite_c.execute(f"SELECT * FROM {tabela}")
-                    rows = sqlite_c.fetchall() # Extrai tuplos puros do Python
-                    
+                    rows = sqlite_c.fetchall()
                     if rows:
-                        # Captura as colunas originais
                         col_names = [description[0] for description in sqlite_c.description]
-                        cols = ", ".join(col_names)
-                        placeholders = ", ".join(["%s" if is_postgres else "?"] * len(col_names))
-                        
+                        cols = ", ".join(col_names); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(col_names))
                         c.execute(f"DELETE FROM {tabela}") 
-                        
-                        q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
-                        c.executemany(q, rows)
-                        
-                        # Atualiza a sequência de IDs do Postgres para não dar erro
+                        c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", rows)
                         if is_postgres:
                             try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
                             except: pass
-                except Exception as e_tab:
-                    flash(f"Atenção: Erro ao migrar a tabela {tabela}. Detalhe: {e_tab}", "warning")
-                    
-            sqlite_conn.close()
-            os.remove(temp_db)
+                except Exception as e_tab: flash(f"Aviso: Tabela {tabela} ignorada. {e_tab}", "warning")
+            sqlite_conn.close(); os.remove(temp_db)
             
-        conn.commit(); conn.close()
-        session.clear()
-        flash("Base de Dados importada com sucesso! Os registos antigos foram migrados. Inicie sessão novamente.", "success")
+        conn.commit(); conn.close(); session.clear()
+        flash("Base de Dados importada com sucesso! Inicie sessão novamente.", "success")
         return redirect(url_for('login'))
         
     except Exception as e:
-        flash(f"Falha ao restaurar a base de dados. Erro: {e}", "danger")
-        return redirect(url_for('admin'))
+        flash(f"Falha ao restaurar banco. Erro: {e}", "danger"); return redirect(url_for('admin'))
+
 
 # -------- ROTAS DO MÓDULO DEMANDAS --------
 @app.route('/demandas')
@@ -763,6 +525,7 @@ def hub_demandas():
 def demandas_avulsas():
     if 'user' not in session: return redirect(url_for('login'))
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    
     if request.method == 'POST':
         acao = request.form.get('acao')
         if acao == 'nova':
@@ -779,25 +542,42 @@ def demandas_avulsas():
             c.execute(f"UPDATE demandas_avulsas SET status='Concluído', data_conclusao={ph} WHERE id={ph}", (dt_c, d_id))
         conn.commit()
 
-    c.execute("SELECT * FROM demandas_avulsas ORDER BY id DESC")
-    demandas = c.fetchall(); conn.close()
-    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES)
+    # FILTROS GET
+    s_filtro = request.args.get('status', 'Todos'); t_filtro = request.args.get('tipo', 'Todos'); r_filtro = request.args.get('resp', 'Todos')
+    q = "SELECT * FROM demandas_avulsas WHERE 1=1"; p = []
+    if s_filtro != 'Todos': q += f" AND status={ph}"; p.append(s_filtro)
+    if t_filtro != 'Todos': q += f" AND tipo_demanda={ph}"; p.append(t_filtro)
+    if r_filtro != 'Todos': q += f" AND responsavel={ph}"; p.append(r_filtro)
+    q += " ORDER BY id DESC"
+    
+    c.execute(q, tuple(p)); demandas = c.fetchall()
+    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]
+    conn.close()
+    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA)
 
 @app.route('/demandas/rotinas')
 def demandas_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
-    conn = conectar_db(); c = conn.cursor()
-    c.execute("SELECT * FROM demands ORDER BY id DESC")
-    rotinas = c.fetchall(); conn.close()
-    return render_template_string(TELA_ROTINAS, rotinas=rotinas)
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    
+    # FILTROS GET
+    s_filtro = request.args.get('status', 'Todos'); t_filtro = request.args.get('tipo', 'Todos'); r_filtro = request.args.get('resp', 'Todos')
+    q = "SELECT * FROM demands WHERE 1=1"; p = []
+    if s_filtro != 'Todos': q += f" AND status={ph}"; p.append(s_filtro)
+    if t_filtro != 'Todos': q += f" AND type={ph}"; p.append(t_filtro)
+    if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
+    q += " ORDER BY id DESC"
+    
+    c.execute(q, tuple(p)); rotinas = c.fetchall()
+    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]
+    conn.close()
+    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
 def upload_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
     arquivos = request.files.getlist('pdfs')
-    if not arquivos or arquivos[0].filename == '':
-        flash("Nenhum ficheiro selecionado.", "warning")
-        return redirect(url_for('demandas_rotinas'))
+    if not arquivos or arquivos[0].filename == '': flash("Nenhum ficheiro selecionado.", "warning"); return redirect(url_for('demandas_rotinas'))
 
     kw = {"REAJUSTE": "Reajuste", "NOVO CONTRATO": "Novo Contrato", "INCLUSÃO": "Inclusão", "EXCLUSÃO": "Exclusão", "AJUSTE": "Ajuste", "EXTENSÃO": "Extensão", "DESCREDENCIAMENTO": "Descredenciamento"}
     valid_ufs = {'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'}
@@ -924,8 +704,7 @@ def pentefino_regional():
         df_operadora.columns = [str(c).strip().upper() for c in df_operadora.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO'])
-        col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
+        col_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
         col_regiao_csv = cacador_de_colunas(df_ibge, ['REGIÃO', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE'])
         col_mun_csv = cacador_de_colunas(df_ibge, ['MUNICÍPIO', 'MUNICIPIO']); col_uf_csv = cacador_de_colunas(df_ibge, ['UF'])
 
@@ -949,12 +728,19 @@ def pentefino_regional():
 
         df_postal, df_operadora = dics_processados[0], dics_processados[1]
 
+        # MAPEAMENTO VIA INPUT DO UTILIZADOR OU CAÇADOR AUTOMÁTICO
+        v_tipo_pos = request.form.get('col_tipo_pos', '').strip().upper()
+        v_esp_pos = request.form.get('col_esp_pos', '').strip().upper()
+        v_tipo_op = request.form.get('col_tipo_op', '').strip().upper()
+        v_esp_op = request.form.get('col_esp_op', '').strip().upper()
+
         col_cnpj_pos = cacador_de_colunas(df_postal, ['CNPJ', 'CPFCNPJ'])
         col_nome_pos = cacador_de_colunas(df_postal, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
         col_mun_pos = cacador_de_colunas(df_postal, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
-        col_esp_pos = cacador_de_colunas(df_postal, ['ESPECIALIDADE', 'ESPECIALIDADES'])
-        col_tipo_pos = cacador_de_colunas(df_postal, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO'])
-        col_esp_op = cacador_de_colunas(df_operadora, ['ESPECIALIDADE', 'ESPECIALIDADES'])
+        
+        col_esp_pos = v_esp_pos if v_esp_pos in df_postal.columns else cacador_de_colunas(df_postal, ['ESPECIALIDADE', 'ESPECIALIDADES'])
+        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO'])
+        col_esp_op = v_esp_op if v_esp_op in df_operadora.columns else cacador_de_colunas(df_operadora, ['ESPECIALIDADE', 'ESPECIALIDADES'])
 
         if not col_cnpj_pos: df_postal['CNPJ_TEMP'] = "S/CNPJ"; col_cnpj_pos = 'CNPJ_TEMP'
         if not col_nome_pos: df_postal['NOME_TEMP'] = "S/NOME"; col_nome_pos = 'NOME_TEMP'
@@ -1014,7 +800,6 @@ def pentefino_regional():
 
         ws.column_dimensions['A'].width = 20; ws.column_dimensions['B'].width = 45; ws.column_dimensions['C'].width = 25; ws.column_dimensions['D'].width = 65
         wb.save(output); output.seek(0)
-
         nome_arquivo = f"Relatorio_Regional_{datetime.now().strftime('%Hh%Mm')}.xlsx"
         return send_file(output, download_name=nome_arquivo, as_attachment=True)
 
@@ -1029,7 +814,9 @@ def pentefino_individual():
         
     try:
         f_postal = request.files.get('f_postal'); f_ibge = request.files.get('f_ibge')
-        cnpj_alvo = re.sub(r'\D', '', request.form.get('cnpj_alvo', ''))
+        
+        # BUSCA INTELIGENTE: PODE SER NOME OU CNPJ
+        alvo_bruto = request.form.get('alvo', '').strip().upper()
         filtro_tipo = request.form.get('filtro_tipo', '').strip().upper()
         
         df_ind = ler_arquivo(f_postal); df_ibge = ler_arquivo(f_ibge)
@@ -1044,11 +831,25 @@ def pentefino_individual():
         col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
         col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CÓDIGO IBGE'])
         
-        if not all([col_cnpj_ind, col_nome_ind, col_mun_ind, col_uf_ind]):
-            flash("Colunas básicas não encontradas na base da Postal.", "danger"); return redirect(url_for('pentefino_individual'))
+        if not col_cnpj_ind or not col_nome_ind:
+            flash("Colunas básicas (Nome/CNPJ) não encontradas na base da Postal.", "danger"); return redirect(url_for('pentefino_individual'))
             
         df_ind[col_cnpj_ind] = df_ind[col_cnpj_ind].astype(str).str.replace(r'\D', '', regex=True)
         
+        # O MOTOR DE BUSCA (NOME OU CNPJ)
+        alvo_numeros = re.sub(r'\D', '', alvo_bruto)
+        mask = df_ind[col_nome_ind].fillna('').str.upper().str.contains(alvo_bruto)
+        if len(alvo_numeros) > 3: mask = mask | df_ind[col_cnpj_ind].str.contains(alvo_numeros)
+        
+        linhas_alvo = df_ind[mask]
+        if linhas_alvo.empty:
+            flash(f"O Alvo '{alvo_bruto}' não foi encontrado na base.", "danger"); return redirect(url_for('pentefino_individual'))
+            
+        # Pega o primeiro que encontrou e usa como base
+        row_alvo = linhas_alvo.iloc[0]
+        cnpj_alvo = str(row_alvo.get(col_cnpj_ind, '')).strip()
+        nome_alvo_real = str(row_alvo.get(col_nome_ind, '')).strip()
+
         dict_agg = {}
         if col_esp_ind: dict_agg[col_esp_ind] = lambda s: ", ".join(sorted(list(extrair_especialidades(s))))
         if col_tipo_ind: dict_agg[col_tipo_ind] = lambda x: " | ".join(x.dropna().astype(str).unique())
@@ -1065,15 +866,13 @@ def pentefino_individual():
         df_ibge['CHAVE_GEO'] = df_ibge[c_mun].apply(normalizar_texto) + "_" + df_ibge[c_uf].apply(normalizar_texto)
         map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao]))
 
-        linhas_alvo = df_ind[df_ind[col_cnpj_ind] == cnpj_alvo]
-        if linhas_alvo.empty:
-            flash(f"CNPJ {cnpj_alvo} não encontrado na Base da Postal.", "danger"); return redirect(url_for('pentefino_individual'))
-            
-        row_alvo = linhas_alvo.iloc[0]
+        # Atualizando a linha alvo após agrupamento
+        linhas_alvo_agrupadas = df_ind[df_ind[col_cnpj_ind] == cnpj_alvo]
+        if not linhas_alvo_agrupadas.empty: row_alvo = linhas_alvo_agrupadas.iloc[0]
+
         mun_alvo = str(row_alvo.get(col_mun_ind, '')).strip().upper(); uf_alvo = str(row_alvo.get(col_uf_ind, '')).strip().upper()
         chave_geo_alvo = normalizar_texto(mun_alvo) + "_" + normalizar_texto(uf_alvo)
         tipo_alvo = str(row_alvo.get(col_tipo_ind, '')).strip().upper() if col_tipo_ind else ""
-        nome_alvo_real = str(row_alvo.get(col_nome_ind, '')).strip()
         
         ibge_alvo = str(row_alvo.get(col_ibge_ind, '')) if col_ibge_ind else None
         regiao_alvo = None
@@ -1134,12 +933,10 @@ def pentefino_individual():
         
         headers = ["Proximidade", "CNPJ", "Prestador Candidato", "Tipo Prestador", "Município/UF", "Status Cobertura", "OBSERVAÇÃO (O que falta)"]
         for col_idx, texto in enumerate(headers, 1):
-            cell = ws.cell(row=2, column=col_idx, value=texto)
-            cell.fill = fill_cols; cell.font = Font(color="000000", bold=True); cell.alignment = align_c; cell.border = thin_border
+            cell = ws.cell(row=2, column=col_idx, value=texto); cell.fill = fill_cols; cell.font = Font(color="000000", bold=True); cell.alignment = align_c; cell.border = thin_border
             
         for i, val in enumerate(pool_row, 1):
-            cp = ws.cell(row=3, column=i, value=val)
-            cp.fill = fill_pool; cp.font = Font(color="000000", bold=True); cp.alignment = align_l; cp.border = thin_border
+            cp = ws.cell(row=3, column=i, value=val); cp.fill = fill_pool; cp.font = Font(color="000000", bold=True); cp.alignment = align_l; cp.border = thin_border
 
         linha = 4
         for r in resultados:
