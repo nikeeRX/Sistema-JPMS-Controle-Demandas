@@ -1,13 +1,13 @@
-from flask import Flask, request, redirect, url_for, session, flash, render_template_string
-from config import setup_db, conectar_db
+from flask import Flask, request, redirect, url_for, session, flash, render_template_string, send_file
+from config import setup_db, conectar_db, replace_placeholders
 import os
 import PyPDF2
 import re
 from datetime import datetime
 import base64
 from io import BytesIO
+import pandas as pd
 
-# Configuração CRÍTICA para o Matplotlib rodar em servidores Web (Sem tela)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta_da_postal_saude'
 
-# Inicia banco
 setup_db()
 
 def get_ph(conn):
@@ -38,7 +37,6 @@ TELA_LOGIN = """
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - COCAP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
@@ -113,10 +111,131 @@ TELA_DASHBOARD = """
     {% if role == 'admin' %}
     <div class="row justify-content-center mt-4">
         <div class="col-md-5">
-            <a href="/admin" class="btn btn-secondary w-100 fw-bold py-3">⚙️ Painel Administrativo</a>
+            <a href="/admin" class="btn btn-secondary w-100 fw-bold py-3">⚙️ Painel Administrativo (BD & Usuários)</a>
         </div>
     </div>
     {% endif %}
+</div>
+</body>
+</html>
+"""
+
+# TELA ADMIN TOTALMENTE REFORMULADA COM IMPORT/EXPORT DO BANCO DE DADOS
+TELA_ADMIN = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Administrativo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body style="background-color: #f0f2f5;">
+<nav class="navbar navbar-dark" style="background-color: #333;">
+  <div class="container-fluid">
+    <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a>
+    <span class="navbar-text text-white fw-bold">Painel Administrativo: BD e Usuários</span>
+  </div>
+</nav>
+
+<div class="container mt-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- ÁREA DE BANCO DE DADOS -->
+        <div class="col-md-12 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white fw-bold">💾 Gestão do Banco de Dados</div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-6 border-end">
+                            <h5 class="text-success">Exportar Backup</h5>
+                            <p class="text-muted small">Baixe um arquivo Excel com todas as demandas e usuários.</p>
+                            <a href="/admin/exportar" class="btn btn-success fw-bold w-75">⬇ Baixar Backup (Excel)</a>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="text-danger">Restaurar Backup</h5>
+                            <p class="text-muted small">Atenção: O upload de um backup apaga os dados atuais.</p>
+                            <form action="/admin/importar" method="POST" enctype="multipart/form-data" class="d-flex flex-column align-items-center">
+                                <input type="file" name="file_backup" class="form-control form-control-sm w-75 mb-2" accept=".xlsx" required>
+                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações atuais serão apagadas e substituídas por este arquivo. Deseja continuar?');">⬆ Importar Backup</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ÁREA DE USUÁRIOS -->
+        <div class="col-md-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Criar Novo Usuário</h5>
+                    <form method="POST" action="/admin">
+                        <input type="hidden" name="acao" value="adicionar">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Usuário</label>
+                                <input type="text" name="username" class="form-control" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Senha</label>
+                                <input type="password" name="password" class="form-control" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Nível</label>
+                                <select name="role" class="form-select">
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100 fw-bold">Salvar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Lista de Usuários</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr><th>ID</th><th>Usuário</th><th>Nível</th><th>Ações</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for u in usuarios %}
+                                <tr>
+                                    <td>{{ u[0] }}</td>
+                                    <td>{{ u[1] }}</td>
+                                    <td><span class="badge bg-{{ 'dark' if u[2] == 'admin' else 'secondary' }}">{{ u[2] | upper }}</span></td>
+                                    <td>
+                                        {% if u[1] != 'admin' and u[1] != user %}
+                                        <form method="POST" action="/admin" style="display:inline;">
+                                            <input type="hidden" name="acao" value="eliminar">
+                                            <input type="hidden" name="user_id" value="{{ u[0] }}">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Eliminar o usuário {{ u[1] }}?');">Excluir</button>
+                                        </form>
+                                        {% else %}
+                                        <span class="text-muted small">Sistema</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 </body>
 </html>
@@ -362,6 +481,113 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+# -------- ROTA: ADMINISTRAÇÃO & BANCO DE DADOS --------
+@app.route('/admin', methods=['GET', 'POST'])
+def admin():
+    if 'user' not in session or session.get('role') != 'admin':
+        return redirect(url_for('dashboard'))
+
+    conn = conectar_db()
+    c = conn.cursor()
+    ph = get_ph(conn)
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao == 'adicionar':
+            u = request.form.get('username'); p = request.form.get('password'); r = request.form.get('role')
+            try:
+                c.execute(f"INSERT INTO users (username, password, role, first_login) VALUES ({ph}, {ph}, {ph}, 1)", (u, p, r))
+                conn.commit()
+                flash(f"Usuário '{u}' criado com sucesso!", "success")
+            except Exception:
+                conn.rollback(); flash("Erro: Nome de usuário já existe!", "danger")
+        elif acao == 'eliminar':
+            uid = request.form.get('user_id')
+            c.execute(f"DELETE FROM users WHERE id={ph}", (uid,))
+            conn.commit(); flash("Usuário excluído com sucesso!", "warning")
+
+    c.execute("SELECT id, username, role, first_login FROM users ORDER BY id ASC")
+    usuarios = c.fetchall()
+    conn.close()
+    return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios)
+
+# EXPORTAR BACKUP (Gera Excel e envia pro navegador)
+@app.route('/admin/exportar')
+def exportar_backup():
+    if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
+    try:
+        conn = conectar_db()
+        df_demands = pd.read_sql_query("SELECT * FROM demands", conn)
+        df_avulsas = pd.read_sql_query("SELECT * FROM demandas_avulsas", conn)
+        df_users = pd.read_sql_query("SELECT * FROM users", conn) # Exporta até a senha pra não quebrar na volta
+        conn.close()
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_demands.to_excel(writer, sheet_name='Rotina_PDFs', index=False)
+            df_avulsas.to_excel(writer, sheet_name='Demandas_Avulsas', index=False)
+            df_users.to_excel(writer, sheet_name='Usuarios', index=False)
+        
+        output.seek(0)
+        data_hora = datetime.now().strftime("%Y_%m_%d_%Hh%Mm%Ss")
+        nome_arquivo = f"Backup_COCAP_{data_hora}.xlsx"
+        
+        return send_file(output, download_name=nome_arquivo, as_attachment=True)
+    except Exception as e:
+        flash(f"Erro ao gerar backup: {e}", "danger")
+        return redirect(url_for('admin'))
+
+# IMPORTAR BACKUP (Upload do Excel e Destruição/Substituição do Banco)
+@app.route('/admin/importar', methods=['POST'])
+def importar_backup():
+    if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
+    
+    file = request.files.get('file_backup')
+    if not file or not file.filename.endswith('.xlsx'):
+        flash("Selecione um arquivo Excel (.xlsx) válido.", "danger")
+        return redirect(url_for('admin'))
+        
+    try:
+        xls = pd.ExcelFile(file)
+        sheets = xls.sheet_names
+        
+        conn = conectar_db(); c = conn.cursor()
+        is_postgres = "psycopg2" in str(type(conn))
+        
+        mapeamento = {
+            'Rotina_PDFs': 'demands',
+            'Demandas_Avulsas': 'demandas_avulsas',
+            'Usuarios': 'users'
+        }
+        
+        for aba, tabela in mapeamento.items():
+            if aba in sheets:
+                df = pd.read_excel(xls, sheet_name=aba)
+                
+                # Cuidado: APAGA A TABELA INTEIRA
+                c.execute(f"DELETE FROM {tabela}")
+                
+                if not df.empty:
+                    df = df.where(pd.notnull(df), None)
+                    cols = ", ".join(df.columns)
+                    placeholders = ", ".join(["%s" if is_postgres else "?"] * len(df.columns))
+                    q = f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})"
+                    
+                    c.executemany(q, df.values.tolist())
+                    
+                    if is_postgres:
+                        try: c.execute(f"SELECT setval('{tabela}_id_seq', COALESCE((SELECT MAX(id)+1 FROM {tabela}), 1), false)")
+                        except: pass
+        
+        conn.commit(); conn.close()
+        session.clear()
+        flash("Banco de Dados restaurado com sucesso! Por segurança, faça login novamente.", "success")
+        return redirect(url_for('login'))
+        
+    except Exception as e:
+        flash(f"Falha ao restaurar banco. Arquivo corrompido ou formato incorreto. Detalhe: {e}", "danger")
+        return redirect(url_for('admin'))
+
 # -------- ROTAS DO MÓDULO DEMANDAS --------
 @app.route('/demandas')
 def hub_demandas():
@@ -456,7 +682,6 @@ def upload_rotinas():
         prest = re.sub(r'^[-_\s]+|[-_\s]+$', '', prest); prest = re.sub(r'\s+', ' ', prest).strip()
         if not prest or len(prest) <= 3: prest = "Não encontrado"
         
-        # Leitura interna do PDF (Upload na memória)
         if prest == "Não encontrado" or uf == "-" or cnpj_p == "Não encontrado":
             try:
                 reader = PyPDF2.PdfReader(file.stream)
@@ -498,7 +723,6 @@ def dashboard_graficos():
     if 'user' not in session: return redirect(url_for('login'))
     conn = conectar_db(); c = conn.cursor()
     
-    # KPIs Rápidos
     c.execute("SELECT COUNT(*) FROM demands")
     t_rotina = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas")
@@ -517,7 +741,6 @@ def dashboard_graficos():
     c_av = c.fetchone()[0]
     conc = c_rot + c_av
     
-    # Gráfico 1: Produtividade (Demandas Finalizadas por Resp)
     fig1, ax1 = plt.subplots(figsize=(6,4))
     c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to")
     dados_prod = c.fetchall()
@@ -529,7 +752,6 @@ def dashboard_graficos():
     chart_prod = base64.b64encode(buf1.read()).decode('utf-8')
     plt.close(fig1)
 
-    # Gráfico 2: Tipos
     fig2, ax2 = plt.subplots(figsize=(6,4))
     c.execute("SELECT type, COUNT(*) FROM demands GROUP BY type")
     dados_tipo = c.fetchall()
@@ -542,13 +764,12 @@ def dashboard_graficos():
     plt.close(fig2)
 
     conn.close()
-    
     return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=0, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo)
 
 @app.route('/pentefino')
 def pentefino():
     if 'user' not in session: return redirect(url_for('login'))
-    return render_template_string(TELA_CONSTRUCAO)
+    return render_template_string(TELA_CONSTRUCAO, titulo="Pente Fino RN 665")
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
