@@ -3,3 +3,4 @@ openpyxl
 PyPDF2
 matplotlib
 psycopg2-binary
+python-dotenv
