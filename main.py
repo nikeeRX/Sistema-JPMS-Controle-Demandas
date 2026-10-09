@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, session, flash, render_template_string, send_file
+from flask import Flask, request, redirect, url_for, session, flash, render_template_string, send_file, jsonify
 from config import setup_db, conectar_db
 import os
 import PyPDF2
@@ -269,13 +269,16 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-# TELA REGIONAL COM SHEETJS VOLTANDO! 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
+# ==================================
+# TELAS DO PENTE FINO COM PROGRESS BAR
+# ==================================
+
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-warning text-white fw-bold">🌍 Mapeamento e Upload das Bases</div>
         <div class="card-body">
@@ -285,62 +288,70 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                         <label class="form-label fw-bold text-primary">1. Base Postal Saúde</label>
                         <input type="file" id="f_postal" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="lerCabecalho(this, 'col_tipo_pos', 'col_esp_pos')">
                         <label class="form-label small">Coluna: Tipo Prestador</label>
-                        <select id="col_tipo_pos" name="col_tipo_pos" class="form-select form-select-sm mb-2"><option value="TIPO PRESTADOR">TIPO PRESTADOR</option></select>
+                        <select id="col_tipo_pos" name="col_tipo_pos" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
                         <label class="form-label small">Coluna: Especialidade</label>
-                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm"><option value="ESPECIALIDADE">ESPECIALIDADE</option></select>
+                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm"><option value="">Aguardando arquivo...</option></select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-success">2. Base Operadora Intermediária</label>
                         <input type="file" id="f_op" name="f_op" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="lerCabecalho(this, 'col_tipo_op', 'col_esp_op')">
                         <label class="form-label small">Coluna: Tipo Prestador</label>
-                        <select id="col_tipo_op" name="col_tipo_op" class="form-select form-select-sm mb-2"><option value="TIPO PRESTADOR">TIPO PRESTADOR</option></select>
+                        <select id="col_tipo_op" name="col_tipo_op" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
                         <label class="form-label small">Coluna: Especialidade</label>
-                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm"><option value="ESPECIALIDADE">ESPECIALIDADE</option></select>
+                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm"><option value="">Aguardando arquivo...</option></select>
                     </div>
                 </div>
                 <div class="mb-4 text-center">
                     <label class="form-label fw-bold">3. Base Geográfica (IBGE)</label>
                     <input type="file" name="f_ibge" class="form-control w-50 mx-auto" accept=".xlsx,.xls,.csv" required>
                 </div>
-                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="this.innerHTML='A processar... Aguarde! Pode demorar alguns minutos.'; this.style.opacity='0.7';">Processar e Gerar Relatório Excel</button>
+                
+                <div id="progresso-container" class="mt-3 mb-3" style="display: none;">
+                    <p id="progresso-texto" class="text-center fw-bold text-warning mb-2">A processar...</p>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="mostrarProgresso('A processar cruzamento regional... Pode demorar até 2 minutos.')">Processar e Gerar Relatório Excel</button>
             </form>
         </div>
     </div>
 </div>
 <script>
+function mostrarProgresso(texto) {
+    document.getElementById('progresso-container').style.display = 'block';
+    document.getElementById('progresso-texto').innerText = texto;
+}
+
 function lerCabecalho(input, selectId1, selectId2) {
     if (!input.files || input.files.length === 0) return;
+    mostrarProgresso('A ler as colunas da planilha no servidor...');
     let s1 = document.getElementById(selectId1); let s2 = document.getElementById(selectId2);
-    s1.innerHTML = '<option value="">A ler...</option>'; s2.innerHTML = '<option value="">A ler...</option>';
-    let file = input.files[0];
-    let reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            let data = new Uint8Array(e.target.result);
-            let workbook = XLSX.read(data, {type: 'array'});
-            let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            let headers = XLSX.utils.sheet_to_json(firstSheet, {header: 1})[0];
-            if(headers) {
-                s1.innerHTML = ''; s2.innerHTML = '';
-                headers.forEach(h => {
-                    let text = (h || '').toString().trim().toUpperCase();
-                    if(text) { s1.options.add(new Option(text, text)); s2.options.add(new Option(text, text)); }
-                });
-            }
-        } catch (err) { s1.innerHTML = '<option value="">Erro</option>'; s2.innerHTML = '<option value="">Erro</option>'; }
-    };
-    reader.readAsArrayBuffer(file);
+    s1.innerHTML = '<option value="">A ler colunas no servidor...</option>'; s2.innerHTML = '<option value="">A ler colunas no servidor...</option>';
+    let formData = new FormData(); formData.append("file", input.files[0]);
+    fetch('/api/ler_cabecalhos', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('progresso-container').style.display = 'none';
+        if(data.erro) { s1.innerHTML = '<option value="">Erro ao ler</option>'; s2.innerHTML = '<option value="">Erro ao ler</option>'; return; }
+        s1.innerHTML = ''; s2.innerHTML = '';
+        data.colunas.forEach(c => { s1.options.add(new Option(c, c)); s2.options.add(new Option(c, c)); });
+    }).catch(e => { 
+        document.getElementById('progresso-container').style.display = 'none';
+        s1.innerHTML = '<option value="">Falha na leitura</option>'; s2.innerHTML = '<option value="">Falha na leitura</option>'; 
+    });
 }
 </script>
 </body></html>"""
 
-# TELA INDIVIDUAL COM SHEETJS DE VOLTA!
-TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
+
+TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Busca Individual (Sniper)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-danger text-white fw-bold">🎯 Parâmetros de Substituição</div>
         <div class="card-body">
@@ -369,73 +380,63 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
                         </select>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="this.innerHTML='A processar cruzamento... Aguarde!'; this.style.opacity='0.7';">🔍 Procurar Substitutos e Gerar Análise</button>
+                
+                <div id="progresso-container" class="mt-3 mb-3" style="display: none;">
+                    <p id="progresso-texto" class="text-center fw-bold text-danger mb-2">A processar...</p>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger w-100"></div>
+                    </div>
+                </div>
+
+                <button id="btn-submit" type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="mostrarProgresso('A gerar Relatório Sniper... Aguarde alguns segundos.')">🔍 Procurar Substitutos e Gerar Análise</button>
             </form>
         </div>
     </div>
 </div>
 <script>
+function mostrarProgresso(texto) {
+    document.getElementById('progresso-container').style.display = 'block';
+    document.getElementById('progresso-texto').innerText = texto;
+}
+
 function carregarInteligencia(input) {
     if (!input.files || input.files.length === 0) return;
+    mostrarProgresso('A extrair inteligência da planilha (CNPJs e Tipos)...');
+    
     let inputAlvo = document.querySelector('input[name="alvo"]');
     let selectTipo = document.getElementById('filtro_tipo');
     let datalist = document.getElementById('lista_alvos');
-
+    
     inputAlvo.disabled = true;
-    inputAlvo.placeholder = "A ler planilha localmente... Aguarde...";
-    selectTipo.innerHTML = '<option value="">A procurar tipos...</option>';
-
-    let file = input.files[0];
-    let reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            let data = new Uint8Array(e.target.result);
-            let workbook = XLSX.read(data, {type: 'array'});
-            let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            let rows = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
-
-            datalist.innerHTML = '';
-            selectTipo.innerHTML = '';
-
-            let optTodos = document.createElement('option'); optTodos.value = ""; optTodos.text = "Todos (Sem filtro)"; selectTipo.appendChild(optTodos);
-            let optMesmo = document.createElement('option'); optMesmo.value = "MESMO TIPO DO ALVO"; optMesmo.text = "Mesmo Tipo do Alvo"; selectTipo.appendChild(optMesmo);
-
-            let tiposSet = new Set();
-
-            rows.forEach(row => {
-                let keys = Object.keys(row);
-                let colCnpj = keys.find(k => { let u = k.toUpperCase(); return u.includes('CNPJ') || u.includes('CPF'); });
-                let colNome = keys.find(k => { let u = k.toUpperCase(); return u.includes('NOME') || u.includes('RAZAO') || u.includes('FANTASIA') || u === 'PRESTADOR'; });
-                let colTipo = keys.find(k => { let u = k.toUpperCase().replace(/\\s/g, ''); return u.includes('TIPOPRESTADOR') || u === 'TIPO' || u === 'CATEGORIA'; });
-
-                let cnpj = colCnpj ? row[colCnpj].toString().replace(/\\D/g, '') : '';
-                let nome = colNome ? row[colNome].toString().trim() : '';
-                let tipo = colTipo ? row[colTipo].toString().trim().toUpperCase() : '';
-
-                if (cnpj && nome) {
-                    let option = document.createElement('option');
-                    option.value = cnpj + ' - ' + nome;
-                    datalist.appendChild(option);
-                }
-                if (tipo && tipo !== 'NAN' && tipo !== 'NONE' && tipo !== '') {
-                    tiposSet.add(tipo);
-                }
-            });
-
-            let tiposArr = Array.from(tiposSet).sort();
-            tiposArr.forEach(t => {
-                let option = document.createElement('option'); option.value = t; option.text = t; selectTipo.appendChild(option);
-            });
-
-            inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ...";
-            inputAlvo.disabled = false;
-        } catch (err) {
-            inputAlvo.placeholder = "Erro ao ler. Digite manualmente.";
-            selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>';
-            inputAlvo.disabled = false;
+    inputAlvo.placeholder = "A analisar a planilha no servidor... Aguarde...";
+    selectTipo.innerHTML = '<option value="">A carregar tipos...</option>';
+    
+    let formData = new FormData(); formData.append("f_postal", input.files[0]);
+    
+    fetch('/api/carregar_alvos', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('progresso-container').style.display = 'none';
+        if(data.erro) { 
+            inputAlvo.placeholder = "Erro: " + data.erro; 
+            selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; 
+            return; 
         }
-    };
-    reader.readAsArrayBuffer(file);
+        
+        datalist.innerHTML = '';
+        data.alvos.forEach(a => { let opt = document.createElement('option'); opt.value = a; datalist.appendChild(opt); });
+        
+        selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option><option value="MESMO TIPO DO ALVO">Mesmo Tipo do Alvo</option>';
+        data.tipos.forEach(t => { let opt = document.createElement('option'); opt.value = t; opt.text = t; selectTipo.appendChild(opt); });
+        
+        inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ...";
+        inputAlvo.disabled = false;
+    }).catch(e => { 
+        document.getElementById('progresso-container').style.display = 'none';
+        inputAlvo.placeholder = "Falha ao processar. Digite manualmente."; 
+        selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; 
+        inputAlvo.disabled = false; 
+    });
 }
 </script>
 </body></html>"""
@@ -484,9 +485,11 @@ def normalizar_texto(texto):
     return ''.join(c for c in unicodedata.normalize('NFD', str(texto)) if unicodedata.category(c) != 'Mn').upper().strip()
 
 def cacador_de_colunas(df, palavras_chave):
+    # Alteração Crítica de Prioridade: Busca exata 100% igual primeiro
     for k in palavras_chave:
         for col in df.columns:
             if k == str(col).strip().upper(): return col
+    # Só depois, busca por aproximação
     for k in palavras_chave:
         for col in df.columns:
             if k in str(col).strip().upper(): return col
@@ -518,8 +521,53 @@ def ler_arquivo(file_obj, nrows=None):
 
 
 # ==========================================
-# ROTAS DO SERVIDOR WEB
+# ROTAS DO SERVIDOR WEB E APIs INVISÍVEIS
 # ==========================================
+
+# API 1: Ler Cabeçalhos do Excel rapidamente
+@app.route('/api/ler_cabecalhos', methods=['POST'])
+def api_ler_cabecalhos():
+    if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
+    file = request.files.get('file')
+    if not file: return jsonify({"erro": "Arquivo não enviado"}), 400
+    try:
+        df = ler_arquivo(file, nrows=0)
+        return jsonify({"colunas": [str(c).strip().upper() for c in df.columns]})
+    except Exception as e: return jsonify({"erro": str(e)}), 500
+
+# API 2: Extrair Nomes/CNPJ e Tipos de Prestador
+@app.route('/api/carregar_alvos', methods=['POST'])
+def api_carregar_alvos():
+    if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
+    f_postal = request.files.get('f_postal')
+    if not f_postal: return jsonify({"erro": "Arquivo não enviado"}), 400
+    try:
+        df = ler_arquivo(f_postal)
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        
+        col_cnpj = cacador_de_colunas(df, ['CNPJ', 'CPFCNPJ'])
+        col_nome = cacador_de_colunas(df, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
+        # Mapeamento CORRIGIDO: TIPOPRESTADOR em 1º lugar.
+        col_tipo = cacador_de_colunas(df, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA'])
+        
+        if not col_cnpj or not col_nome: return jsonify({"erro": "Colunas de Nome ou CNPJ não encontradas"})
+        
+        df[col_cnpj] = df[col_cnpj].astype(str).str.replace(r'\D', '', regex=True)
+        df_clean = df.dropna(subset=[col_cnpj, col_nome]).drop_duplicates(subset=[col_cnpj])
+        
+        alvos = []
+        tipos_set = set()
+        for _, row in df_clean.iterrows():
+            cnpj = str(row[col_cnpj]).strip(); nome = str(row[col_nome]).strip()
+            if cnpj and cnpj != 'NAN' and nome: alvos.append(f"{cnpj} - {nome}")
+            if col_tipo:
+                tipo = str(row[col_tipo]).strip().upper()
+                if tipo and tipo != 'NAN' and tipo != 'NONE': tipos_set.add(tipo)
+                
+        return jsonify({"alvos": alvos, "tipos": sorted(list(tipos_set))})
+    except Exception as e: return jsonify({"erro": str(e)}), 500
+
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -815,7 +863,7 @@ def pentefino_regional():
         col_mun_pos = cacador_de_colunas(df_postal, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
         
         col_esp_pos = v_esp_pos if v_esp_pos in df_postal.columns else cacador_de_colunas(df_postal, ['ESPECIALIDADE', 'ESPECIALIDADES'])
-        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO'])
+        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO'])
         col_esp_op = v_esp_op if v_esp_op in df_operadora.columns else cacador_de_colunas(df_operadora, ['ESPECIALIDADE', 'ESPECIALIDADES'])
 
         if not col_cnpj_pos: df_postal['CNPJ_TEMP'] = "S/CNPJ"; col_cnpj_pos = 'CNPJ_TEMP'
@@ -897,7 +945,7 @@ def pentefino_individual():
         col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
         col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
         col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
-        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO', 'CATEGORIA'])
+        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA'])
         col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
         col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CÓDIGO IBGE'])
         
@@ -966,8 +1014,6 @@ def pentefino_individual():
             else: continue
             
             tipo_cand = str(row.get(col_tipo_ind, '')).strip().upper() if col_tipo_ind else "-"
-            
-            # FILTRO DE TIPO APLICADO CORRETAMENTE
             if filtro_tipo == "MESMO TIPO DO ALVO" and tipo_cand != tipo_alvo: continue
             elif filtro_tipo and filtro_tipo != "MESMO TIPO DO ALVO" and tipo_cand != filtro_tipo: continue
                 
