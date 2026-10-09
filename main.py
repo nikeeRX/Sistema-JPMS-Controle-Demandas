@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, session, flash, render_template_string, send_file
+from flask import Flask, request, redirect, url_for, session, flash, render_template_string, send_file, jsonify
 from config import setup_db, conectar_db
 import os
 import PyPDF2
@@ -146,9 +146,9 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
     <div class="card shadow-sm mb-3 border-0 bg-light">
         <div class="card-body py-2">
             <form method="GET" action="/demandas/avulsas" class="row g-2 align-items-center">
-                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option>{% for s in status_list %}<option value="{{s}}">{{s}}</option>{% endfor %}</select></div>
-                <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}">{{t}}</option>{% endfor %}</select></div>
-                <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option>{% for s in status_list %}<option value="{{s}}" {% if s == atual_status %}selected{% endif %}>{{s}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}" {% if t == atual_tipo %}selected{% endif %}>{{t}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}" {% if u == atual_resp %}selected{% endif %}>{{u}}</option>{% endfor %}</select></div>
                 <div class="col-md-3"><button type="submit" class="btn btn-secondary btn-sm w-100 fw-bold">🔍 Filtrar Resultados</button></div>
             </form>
         </div>
@@ -199,9 +199,9 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     <div class="card shadow-sm mb-3 border-0 bg-light">
         <div class="card-body py-2">
             <form method="GET" action="/demandas/rotinas" class="row g-2 align-items-center">
-                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option><option value="Pendente">Pendente</option><option value="Em Análise">Em Análise</option><option value="Finalizada">Finalizada</option></select></div>
-                <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}">{{t}}</option>{% endfor %}</select></div>
-                <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option><option value="Pendente" {% if atual_status == 'Pendente' %}selected{% endif %}>Pendente</option><option value="Em Análise" {% if atual_status == 'Em Análise' %}selected{% endif %}>Em Análise</option><option value="Finalizada" {% if atual_status == 'Finalizada' %}selected{% endif %}>Finalizada</option></select></div>
+                <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}" {% if t == atual_tipo %}selected{% endif %}>{{t}}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}" {% if u == atual_resp %}selected{% endif %}>{{u}}</option>{% endfor %}</select></div>
                 <div class="col-md-3"><button type="submit" class="btn btn-secondary btn-sm w-100 fw-bold">🔍 Filtrar Resultados</button></div>
             </form>
         </div>
@@ -264,13 +264,13 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
             <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-warning" style="font-size: 3rem;">🌍</h1><h4 class="fw-bold text-secondary">Cruzamento Regional em Massa</h4><p class="text-muted">Análise de cobertura completa comparando a Postal com a Operadora Intermediária.</p><a href="/pentefino/regional" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
         </div>
         <div class="col-md-5 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente e avalie o Pool da Região.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
+            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente usando Nome ou CNPJ.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
         </div>
     </div>
 </div></body></html>"""
 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
+# TELA REGIONAL COM AJAX PURO (SEM JAVASCRIPT EXTERNO)
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
@@ -284,17 +284,17 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                         <label class="form-label fw-bold text-primary">1. Base Postal Saúde</label>
                         <input type="file" id="f_postal" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="lerCabecalho(this, 'col_tipo_pos', 'col_esp_pos')">
                         <label class="form-label small">Coluna: Tipo Prestador</label>
-                        <select id="col_tipo_pos" name="col_tipo_pos" class="form-select form-select-sm mb-2"><option value="TIPO PRESTADOR">TIPO PRESTADOR</option></select>
+                        <select id="col_tipo_pos" name="col_tipo_pos" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
                         <label class="form-label small">Coluna: Especialidade</label>
-                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm"><option value="ESPECIALIDADE">ESPECIALIDADE</option></select>
+                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm"><option value="">Aguardando arquivo...</option></select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-success">2. Base Operadora Intermediária</label>
                         <input type="file" id="f_op" name="f_op" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="lerCabecalho(this, 'col_tipo_op', 'col_esp_op')">
                         <label class="form-label small">Coluna: Tipo Prestador</label>
-                        <select id="col_tipo_op" name="col_tipo_op" class="form-select form-select-sm mb-2"><option value="TIPO PRESTADOR">TIPO PRESTADOR</option></select>
+                        <select id="col_tipo_op" name="col_tipo_op" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
                         <label class="form-label small">Coluna: Especialidade</label>
-                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm"><option value="ESPECIALIDADE">ESPECIALIDADE</option></select>
+                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm"><option value="">Aguardando arquivo...</option></select>
                     </div>
                 </div>
                 <div class="mb-4 text-center">
@@ -309,29 +309,22 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
 <script>
 function lerCabecalho(input, selectId1, selectId2) {
     if (!input.files || input.files.length === 0) return;
-    let file = input.files[0];
-    let reader = new FileReader();
-    reader.onload = function(e) {
-        let data = new Uint8Array(e.target.result);
-        let workbook = XLSX.read(data, {type: 'array'});
-        let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        let headers = XLSX.utils.sheet_to_json(firstSheet, {header: 1})[0];
-        if(headers) {
-            let s1 = document.getElementById(selectId1); let s2 = document.getElementById(selectId2);
-            s1.innerHTML = ''; s2.innerHTML = '';
-            headers.forEach(h => {
-                let text = (h || '').toString().trim().toUpperCase();
-                if(text) { s1.options.add(new Option(text, text)); s2.options.add(new Option(text, text)); }
-            });
-        }
-    };
-    reader.readAsArrayBuffer(file);
+    let s1 = document.getElementById(selectId1); let s2 = document.getElementById(selectId2);
+    s1.innerHTML = '<option value="">A ler colunas no servidor...</option>'; s2.innerHTML = '<option value="">A ler colunas no servidor...</option>';
+    let formData = new FormData(); formData.append("file", input.files[0]);
+    fetch('/api/ler_cabecalhos', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if(data.erro) { s1.innerHTML = '<option value="">Erro ao ler</option>'; s2.innerHTML = '<option value="">Erro ao ler</option>'; return; }
+        s1.innerHTML = ''; s2.innerHTML = '';
+        data.colunas.forEach(c => { s1.options.add(new Option(c, c)); s2.options.add(new Option(c, c)); });
+    }).catch(e => { s1.innerHTML = '<option value="">Falha na leitura</option>'; s2.innerHTML = '<option value="">Falha na leitura</option>'; });
 }
 </script>
 </body></html>"""
 
-TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
+# TELA INDIVIDUAL COM AJAX PURO (SEM JAVASCRIPT EXTERNO)
+TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Busca Individual (Sniper)</span></div></nav>
 <div class="container mt-4">
@@ -343,7 +336,7 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
                 <div class="row mb-3 bg-light p-3 rounded">
                     <div class="col-md-6 border-end">
                         <label class="form-label fw-bold text-primary">1. Base Postal Saúde (Upload p/ liberar as buscas)</label>
-                        <input type="file" name="f_postal" id="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="carregarInteligencia(this)">
+                        <input type="file" name="f_postal" class="form-control mb-2" accept=".xlsx,.xls,.csv" required onchange="carregarInteligencia(this)">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-success">2. Base Geográfica (IBGE)</label>
@@ -354,18 +347,15 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
                 <div class="row mt-4">
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold text-danger">Pesquisar Alvo (Nome OU CNPJ)</label>
-                        <!-- AUTOCOMPLETAR MÁGICO -->
-                        <input type="text" name="alvo" list="lista_alvos" class="form-control border-danger" placeholder="Carregue a planilha acima para liberar a pesquisa..." required autocomplete="off">
+                        <input type="text" name="alvo" list="lista_alvos" class="form-control border-danger" placeholder="Carregue a planilha acima para liberar a pesquisa..." required autocomplete="off" disabled>
                         <datalist id="lista_alvos"></datalist>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Filtro de Tipo Prestador</label>
-                        <select name="filtro_tipo" id="filtro_tipo" class="form-select">
-                            <option value="">Todos (Sem filtro)</option>
-                        </select>
+                        <select name="filtro_tipo" id="filtro_tipo" class="form-select"><option value="">Todos (Sem filtro)</option></select>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="this.innerHTML='A processar cruzamento... Aguarde!'; this.style.opacity='0.7';">🔍 Procurar Substitutos</button>
+                <button type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="this.innerHTML='A processar cruzamento... Aguarde!'; this.style.opacity='0.7';">🔍 Procurar Substitutos e Gerar Análise</button>
             </form>
         </div>
     </div>
@@ -373,46 +363,27 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
 <script>
 function carregarInteligencia(input) {
     if (!input.files || input.files.length === 0) return;
-    let file = input.files[0];
-    let reader = new FileReader();
-    reader.onload = function(e) {
-        let data = new Uint8Array(e.target.result);
-        let workbook = XLSX.read(data, {type: 'array'});
-        let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        let rows = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
-
-        let datalist = document.getElementById('lista_alvos');
-        let selectTipo = document.getElementById('filtro_tipo');
+    let inputAlvo = document.querySelector('input[name="alvo"]');
+    let selectTipo = document.getElementById('filtro_tipo');
+    let datalist = document.getElementById('lista_alvos');
+    
+    inputAlvo.disabled = true;
+    inputAlvo.placeholder = "A analisar a planilha de forma segura no servidor... Aguarde...";
+    selectTipo.innerHTML = '<option value="">A carregar tipos...</option>';
+    
+    let formData = new FormData(); formData.append("f_postal", input.files[0]);
+    
+    fetch('/api/carregar_alvos', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if(data.erro) { inputAlvo.placeholder = "Erro: " + data.erro; selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; return; }
         datalist.innerHTML = '';
+        data.alvos.forEach(a => { let opt = document.createElement('option'); opt.value = a; datalist.appendChild(opt); });
         selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>';
-        let tiposSet = new Set();
-
-        rows.forEach(row => {
-            let keys = Object.keys(row);
-            let colCnpj = keys.find(k => k.toUpperCase().includes('CNPJ'));
-            let colNome = keys.find(k => k.toUpperCase().includes('NOME') || k.toUpperCase().includes('RAZAO') || k.toUpperCase().includes('FANTASIA') || k.toUpperCase() === 'PRESTADOR');
-            let colTipo = keys.find(k => k.toUpperCase().includes('TIPO PRESTADOR') || k.toUpperCase() === 'TIPO');
-
-            let cnpj = colCnpj ? row[colCnpj].toString().replace(/\D/g, '') : '';
-            let nome = colNome ? row[colNome].toString().trim() : '';
-            let tipo = colTipo ? row[colTipo].toString().trim().toUpperCase() : '';
-
-            if (cnpj && nome) {
-                let option = document.createElement('option');
-                option.value = cnpj + ' - ' + nome;
-                datalist.appendChild(option);
-            }
-            if (tipo && tipo !== 'NAN' && tipo !== '') { tiposSet.add(tipo); }
-        });
-
-        let tiposArr = Array.from(tiposSet).sort();
-        tiposArr.forEach(t => {
-            let option = document.createElement('option');
-            option.value = t; option.text = t;
-            selectTipo.appendChild(option);
-        });
-    };
-    reader.readAsArrayBuffer(file);
+        data.tipos.forEach(t => { let opt = document.createElement('option'); opt.value = t; opt.text = t; selectTipo.appendChild(opt); });
+        inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ...";
+        inputAlvo.disabled = false;
+    }).catch(e => { inputAlvo.placeholder = "Falha ao processar. Digite manualmente."; selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; inputAlvo.disabled = false; });
 }
 </script>
 </body></html>"""
@@ -426,7 +397,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
             <h4 class="fw-bold mb-1">✅ Análise Concluída!</h4>
             <p class="mb-0 text-dark">Alvo: <strong>{{ alvo_nome }}</strong> ({{ alvo_cnpj }})</p>
         </div>
-        <!-- BOTÃO MÁGICO: Baixa o Excel que está escondido no HTML -->
         <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Descarregar Planilha Completa (Excel)</a>
     </div>
 
@@ -485,14 +455,14 @@ def extrair_especialidades(series):
                 specs.add(DE_PARA.get(v, v))
     return specs
 
-def ler_arquivo(file_obj):
+def ler_arquivo(file_obj, nrows=None):
     filename = file_obj.filename.lower()
     if filename.endswith('.csv'):
-        try: return pd.read_csv(file_obj, sep=';', encoding='latin1', dtype=str)
+        try: return pd.read_csv(file_obj, sep=';', encoding='latin1', dtype=str, nrows=nrows)
         except: 
             file_obj.seek(0)
-            return pd.read_csv(file_obj, sep=',', encoding='utf-8', dtype=str)
-    else: return pd.read_excel(file_obj, dtype=str)
+            return pd.read_csv(file_obj, sep=',', encoding='utf-8', dtype=str, nrows=nrows)
+    else: return pd.read_excel(file_obj, dtype=str, nrows=nrows)
 
 
 # ==========================================
@@ -593,12 +563,12 @@ def importar_backup():
                 try:
                     sqlite_c.execute(f"SELECT * FROM {tabela}"); rows = sqlite_c.fetchall()
                     if rows:
-                        cols = ", ".join([desc[0] for desc in sqlite_c.description]); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(sqlite_c.description))
+                        col_names = [desc[0] for desc in sqlite_c.description]; cols = ", ".join(col_names); placeholders = ", ".join(["%s" if is_postgres else "?"] * len(col_names))
                         c.execute(f"DELETE FROM {tabela}"); c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", rows)
                 except Exception: pass
             sqlite_conn.close(); os.remove(temp_db)
         conn.commit(); conn.close(); session.clear()
-        flash("Base de Dados importada! Inicie sessão novamente.", "success")
+        flash("Base de Dados importada com sucesso! Inicie sessão novamente.", "success")
         return redirect(url_for('login'))
     except Exception as e: flash(f"Falha ao restaurar banco. Erro: {e}", "danger"); return redirect(url_for('admin'))
 
@@ -618,7 +588,7 @@ def demandas_avulsas():
             sol = request.form.get('solicitante'); prazo = request.form.get('prazo')
             dt_ent = datetime.now().strftime("%d/%m/%Y %H:%M")
             c.execute(f"INSERT INTO demandas_avulsas (tipo_demanda, assunto, solicitante, data_entrada, prazo, status, responsavel, observacao) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Pendente', 'Nenhum', '')", (td, assunto, sol, dt_ent, prazo))
-            flash("Demanda Avulsa criada!", "success")
+            flash("Demanda Avulsa criada com sucesso!", "success")
         elif acao == 'assumir': c.execute(f"UPDATE demandas_avulsas SET status='Em Análise', responsavel={ph} WHERE id={ph}", (session['user'], request.form.get('id')))
         elif acao == 'concluir': c.execute(f"UPDATE demandas_avulsas SET status='Concluído', data_conclusao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y"), request.form.get('id')))
         conn.commit()
@@ -629,8 +599,8 @@ def demandas_avulsas():
     if t_filtro != 'Todos': q += f" AND tipo_demanda={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND responsavel={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); demandas = c.fetchall()
-    c.execute("SELECT username FROM users"); usuarios = ['Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA)
+    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
+    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro)
 
 @app.route('/demandas/rotinas')
 def demandas_rotinas():
@@ -642,41 +612,34 @@ def demandas_rotinas():
     if t_filtro != 'Todos': q += f" AND type={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
-    c.execute("SELECT username FROM users"); usuarios = ['Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios)
+    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
+    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
 def upload_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
     arquivos = request.files.getlist('pdfs')
     if not arquivos or arquivos[0].filename == '': flash("Nenhum ficheiro selecionado.", "warning"); return redirect(url_for('demandas_rotinas'))
-
     kw = {"REAJUSTE": "Reajuste", "NOVO CONTRATO": "Novo Contrato", "INCLUSÃO": "Inclusão", "EXCLUSÃO": "Exclusão", "AJUSTE": "Ajuste", "EXTENSÃO": "Extensão", "DESCREDENCIAMENTO": "Descredenciamento"}
     valid_ufs = {'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'}
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn); count = 0
-    
     for file in arquivos:
         f_name = file.filename
         c.execute(f"SELECT id FROM demands WHERE filename={ph}", (f_name,))
         if c.fetchone(): continue
-        
         fu = f_name.upper(); dem = "Não Identificada"
         for k, v in kw.items():
             if k in fu: dem = v; break
-                
         f_clean = re.sub(r'\.pdf$', '', fu, flags=re.IGNORECASE)
         docs_brutos = re.findall(r'\d{2}[.\s_-]*\d{3}[.\s_-]*\d{3}[.\s/-]*\d{4}[-\s_]*\d{2}|\d{3}[.\s_-]*\d{3}[.\s_-]*\d{3}[-\s_]*\d{2}|\b\d{14}\b|\b\d{11}\b', f_clean)
         cnpj_p = "Não encontrado"
-        
         for c_ in docs_brutos:
             cn = re.sub(r'\D', '', c_)
             if len(cn) == 14: cnpj_p = f"{cn[:2]}.{cn[2:5]}.{cn[5:8]}/{cn[8:12]}-{cn[12:]}"; f_clean = f_clean.replace(c_, ''); break
             elif len(cn) == 11: cnpj_p = f"{cn[:3]}.{cn[3:6]}.{cn[6:9]}-{cn[9:]}"; f_clean = f_clean.replace(c_, ''); break
-
         mun, uf, prest = "-", "-", "Não encontrado"
         for k in kw.keys(): f_clean = re.sub(k, '', f_clean, flags=re.IGNORECASE)
         parts = [p.strip() for p in f_clean.split('-') if p.strip()]
-        
         if len(parts) >= 2:
             p1 = parts[-1].upper(); p2 = parts[-2].upper() if len(parts) > 1 else ""
             if p1 in valid_ufs: uf = p1; mun = p2 if len(parts) >= 3 else "-"; prest = " ".join(parts[:-2]).strip() if len(parts) >= 3 else p2
@@ -689,10 +652,8 @@ def upload_rotinas():
             m_uf_end = re.search(r'\b([A-Z]{2})\b$', parts[0].upper())
             if m_uf_end and m_uf_end.group(1) in valid_ufs: uf = m_uf_end.group(1); prest = re.sub(r'\b' + uf + r'\b$', '', parts[0]).strip()
             else: prest = parts[0]
-            
         prest = re.sub(r'^[-_\s]+|[-_\s]+$', '', prest); prest = re.sub(r'\s+', ' ', prest).strip()
         if not prest or len(prest) <= 3: prest = "Não encontrado"
-        
         if prest == "Não encontrado" or uf == "-" or cnpj_p == "Não encontrado":
             try:
                 reader = PyPDF2.PdfReader(file.stream); full_txt = ""
@@ -703,7 +664,6 @@ def upload_rotinas():
                         cn = re.sub(r'\D', '', c_)
                         if len(cn) == 14: cnpj_p = f"{cn[:2]}.{cn[2:5]}.{cn[5:8]}/{cn[8:12]}-{cn[12:]}"; break
             except: pass
-
         c.execute(f"INSERT INTO demands (filename, filepath, type, status, assigned_to, prestador, cnpj, municipio, uf, data_entrada) VALUES ({ph}, 'WEB_UPLOAD', {ph}, 'Pendente', 'Nenhum', {ph}, {ph}, {ph}, {ph}, {ph})", 
                      (f_name, dem, prest, cnpj_p, mun, uf, datetime.now().strftime("%d/%m/%Y %H:%M")))
         count += 1
@@ -752,6 +712,50 @@ def dashboard_graficos():
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
     return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=0, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo)
+
+# -------- ROTAS DO MÓDULO PENTE FINO (RN 665) --------
+
+# API INVISÍVEL 1: Ler cabeçalhos (Resolve o bloqueio do Firewall)
+@app.route('/api/ler_cabecalhos', methods=['POST'])
+def api_ler_cabecalhos():
+    if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
+    file = request.files.get('file')
+    if not file: return jsonify({"erro": "Arquivo não enviado"}), 400
+    try:
+        # Usa nrows=0 para ler só a primeira linha (cabeçalhos) do Excel em 1 segundo
+        df = ler_arquivo(file, nrows=0)
+        return jsonify({"colunas": [str(c).strip().upper() for c in df.columns]})
+    except Exception as e: return jsonify({"erro": str(e)}), 500
+
+# API INVISÍVEL 2: Ler prestadores (Resolve o bloqueio do Firewall e gera o Autocomplete)
+@app.route('/api/carregar_alvos', methods=['POST'])
+def api_carregar_alvos():
+    if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
+    f_postal = request.files.get('f_postal')
+    if not f_postal: return jsonify({"erro": "Arquivo não enviado"}), 400
+    try:
+        df = ler_arquivo(f_postal)
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        col_cnpj = cacador_de_colunas(df, ['CNPJ', 'CPFCNPJ'])
+        col_nome = cacador_de_colunas(df, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
+        col_tipo = cacador_de_colunas(df, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO'])
+        
+        if not col_cnpj or not col_nome: return jsonify({"erro": "Colunas de Nome ou CNPJ não encontradas"})
+        
+        df[col_cnpj] = df[col_cnpj].astype(str).str.replace(r'\D', '', regex=True)
+        df_clean = df.dropna(subset=[col_cnpj, col_nome]).drop_duplicates(subset=[col_cnpj])
+        
+        alvos = []
+        tipos_set = set()
+        for _, row in df_clean.iterrows():
+            cnpj = str(row[col_cnpj]).strip(); nome = str(row[col_nome]).strip()
+            if cnpj and cnpj != 'NAN' and nome: alvos.append(f"{cnpj} - {nome}")
+            if col_tipo:
+                tipo = str(row[col_tipo]).strip().upper()
+                if tipo and tipo != 'NAN' and tipo != 'NONE': tipos_set.add(tipo)
+                
+        return jsonify({"alvos": alvos, "tipos": sorted(list(tipos_set))})
+    except Exception as e: return jsonify({"erro": str(e)}), 500
 
 @app.route('/pentefino')
 def hub_pentefino():
@@ -881,16 +885,18 @@ def pentefino_individual():
         df_ind.columns = [str(c).strip().upper() for c in df_ind.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_cnpj_ind = cacador_de_colunas(df_ind, ['CNPJ', 'CPFCNPJ']); col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
-        col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']); col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
-        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO']); col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
+        col_cnpj_ind = cacador_de_colunas(df_ind, ['CNPJ', 'CPFCNPJ'])
+        col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
+        col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
+        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPO PRESTADOR', 'TIPO_PRESTADOR', 'TIPOPRESTADOR', 'TIPO'])
+        col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
         col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CÓDIGO IBGE'])
         
         if not col_cnpj_ind or not col_nome_ind: flash("Colunas básicas não encontradas.", "danger"); return redirect(url_for('pentefino_individual'))
             
         df_ind[col_cnpj_ind] = df_ind[col_cnpj_ind].astype(str).str.replace(r'\D', '', regex=True)
         
-        # BUSCA SNIPER INTELIGENTE (Trata nome com caracteres ou apenas CNPJ)
         alvo_numeros = re.sub(r'\D', '', alvo_bruto)
         mask = df_ind[col_nome_ind].fillna('').astype(str).str.upper().str.contains(alvo_bruto, na=False, regex=False)
         if len(alvo_numeros) > 3: mask = mask | (df_ind[col_cnpj_ind].str.contains(alvo_numeros, na=False, regex=False))
@@ -1004,17 +1010,11 @@ def pentefino_individual():
         ws.column_dimensions['E'].width = 20; ws.column_dimensions['F'].width = 25; ws.column_dimensions['G'].width = 65
 
         wb.save(output); output.seek(0)
-        
-        # Filtra só os caras com zero faltas (índice 1 é o len(faltante)) para exibir na tela!
         resultados_100 = [r for r in resultados if r[1] == 0]
-        # Transforma o Excel em um link criptografado para o botão de download verde da tela
         b64_data = base64.b64encode(output.getvalue()).decode('utf-8')
         
         return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, resultados_100=resultados_100)
-
-    except Exception as e:
-        flash(f"Erro ao processar as planilhas: {e}", "danger")
-        return redirect(url_for('pentefino_individual'))
+    except Exception as e: flash(f"Erro ao processar as planilhas: {e}", "danger"); return redirect(url_for('pentefino_individual'))
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
