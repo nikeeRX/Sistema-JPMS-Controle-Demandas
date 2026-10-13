@@ -23,6 +23,19 @@ setup_db()
 def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
+def calcular_sla(data_str, status):
+    if not data_str or status in ['Concluído', 'Finalizada', 'Cancelada']:
+        return -1 
+    try:
+        if len(str(data_str).strip()) > 10:
+            dt = datetime.strptime(str(data_str).strip(), "%d/%m/%Y %H:%M")
+        else:
+            dt = datetime.strptime(str(data_str).strip(), "%d/%m/%Y")
+        dias = (datetime.now() - dt).days
+        return dias if dias >= 0 else 0
+    except:
+        return 0
+
 # ==========================================
 # LISTAS GLOBAIS E CONSTANTES
 # ==========================================
@@ -137,7 +150,13 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
     <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📊</h1><a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold fs-6">Dashboard Gerencial</a></div></div>
 </div></div></body></html>"""
 
-TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    .bg-atencao { background-color: #fff3cd !important; }
+    .bg-urgente { background-color: #ffe8cc !important; }
+    .bg-critico { background-color: #f8d7da !important; }
+</style>
+</head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Demandas Avulsas</span></div></nav>
 <div class="container-fluid mt-4">
@@ -170,23 +189,36 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
     
     <div class="card shadow-sm border-0"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-secondary fw-bold">Lista de Demandas <small>(Clique duplo na linha para Editar)</small></h5>
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Demandas <small class="text-muted">(Duplo clique p/ Editar)</small></h5>
             <span class="badge bg-primary fs-6">{{ demandas|length }} Registro(s) Encontrado(s)</span>
         </div>
         <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em; cursor: pointer;">
-            <thead class="table-dark"><tr><th>ID</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
+            <thead class="table-dark"><tr><th>ID</th><th>SLA (Dias)</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
             <tbody>{% for d in demandas %}
-            <tr ondblclick="document.getElementById('btn-edit-avulsa-{{d[0]}}').click();">
-                <td>{{ d[0] }}</td><td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
-                <td><span class="badge bg-{{ 'warning text-dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'info' }}">{{ d[6] }}</span></td>
+            {% set sla = calc_sla(d[4], d[6]) %}
+            {% set row_class = '' %}
+            {% if sla >= 6 %}{% set row_class = 'bg-critico' %}
+            {% elif sla >= 4 %}{% set row_class = 'bg-urgente' %}
+            {% elif sla >= 2 %}{% set row_class = 'bg-atencao' %}
+            {% endif %}
+            <tr class="{{ row_class }}" ondblclick="document.getElementById('btn-edit-avulsa-{{d[0]}}').click();">
+                <td class="fw-bold">{{ d[0] }}</td>
+                <td>
+                    {% if sla >= 0 %}
+                        <span class="badge bg-{{ 'danger' if sla >= 6 else 'warning text-dark' if sla >= 4 else 'secondary' }}">{{ sla }} dia(s)</span>
+                    {% else %}
+                        <span class="text-muted fw-bold">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
+                <td><span class="badge bg-{{ 'dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'info' }}">{{ d[6] }}</span></td>
                 <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
                 <td>
                     <form method="POST" action="/demandas/avulsas" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Concluir">✔</button>
                     </form>
-                    <!-- Botão Editar Invisível/Visível que abre o Modal -->
                     <button id="btn-edit-avulsa-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar" 
                         data-id="{{ d[0] }}" data-tipo="{{ d[1] }}" data-assunto="{{ d[2] }}" data-sol="{{ d[3] }}" 
                         data-prazo="{{ d[5] }}" data-status="{{ d[6] }}" data-resp="{{ d[7] }}" data-obs="{{ d[9] if d[9] else '' }}"
@@ -257,7 +289,13 @@ function abrirModalAvulsa(btn) {
 </script>
 </body></html>"""
 
-TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    .bg-atencao { background-color: #fff3cd !important; }
+    .bg-urgente { background-color: #ffe8cc !important; }
+    .bg-critico { background-color: #f8d7da !important; }
+</style>
+</head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Processamento de PDFs</span></div></nav>
 <div class="container-fluid mt-4">
@@ -286,23 +324,36 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     
     <div class="card shadow-sm border-0"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small>(Clique duplo na linha para Editar)</small></h5>
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small class="text-muted">(Duplo clique p/ Editar)</small></h5>
             <span class="badge bg-primary fs-6">{{ rotinas|length }} Registro(s) Encontrado(s)</span>
         </div>
         <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em; cursor: pointer;">
-            <thead class="table-dark"><tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
+            <thead class="table-dark"><tr><th>ID</th><th>SLA (Dias)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
             <tbody>{% for d in rotinas %}
-            <tr ondblclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">
-                <td>{{ d[0] }}</td><td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
-                <td><span class="badge bg-{{ 'warning text-dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
+            {% set sla = calc_sla(d[9], d[3]) %}
+            {% set row_class = '' %}
+            {% if sla >= 6 %}{% set row_class = 'bg-critico' %}
+            {% elif sla >= 4 %}{% set row_class = 'bg-urgente' %}
+            {% elif sla >= 2 %}{% set row_class = 'bg-atencao' %}
+            {% endif %}
+            <tr class="{{ row_class }}" ondblclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">
+                <td class="fw-bold">{{ d[0] }}</td>
+                <td>
+                    {% if sla >= 0 %}
+                        <span class="badge bg-{{ 'danger' if sla >= 6 else 'warning text-dark' if sla >= 4 else 'secondary' }}">{{ sla }} dia(s)</span>
+                    {% else %}
+                        <span class="text-muted fw-bold">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
+                <td><span class="badge bg-{{ 'dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
                 <td>{{ d[4] }}</td>
                 <td>
                     <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
-                    <!-- Botão Editar -->
                     <button id="btn-edit-rot-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Informações"
                         data-id="{{ d[0] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
                         data-perc="{{ d[13] if d[13] else '' }}" data-rs="{{ d[14] if d[14] else '' }}" data-nup="{{ d[15] if d[15] else '' }}"
@@ -396,12 +447,20 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Dashboard Geral</span></div></nav>
 <div class="container mt-4">
-    <div class="row text-center mb-4">
+    <div class="row text-center mb-2">
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-primary text-white p-3"><h5 class="mb-1">Total Demandas</h5><h2 class="fw-bold">{{ d_total }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-info text-white p-3"><h5 class="mb-1">Em Análise</h5><h2 class="fw-bold">{{ d_ana }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
     </div>
+    
+    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA (Pendentes)</h5>
+    <div class="row text-center mt-3 mb-4">
+        <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h5 class="mb-1">Atenção (2 a 3 dias)</h5><h2 class="fw-bold">{{ sla_atencao }}</h2></div></div>
+        <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h5 class="mb-1">Urgente (4 a 5 dias)</h5><h2 class="fw-bold">{{ sla_urgente }}</h2></div></div>
+        <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #f8d7da; color: #721c24;"><h5 class="mb-1">Crítico (6+ dias)</h5><h2 class="fw-bold">{{ sla_critico }}</h2></div></div>
+    </div>
+
     <div class="row">
         <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Produtividade por Colaborador</h5><img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid rounded"></div></div></div>
         <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Distribuição por Tipo de Demanda</h5><img src="data:image/png;base64,{{ chart_tipo }}" class="img-fluid rounded"></div></div></div>
@@ -711,7 +770,6 @@ def api_carregar_alvos():
         return jsonify({"alvos": alvos, "tipos": sorted(list(tipos_set))})
     except Exception as e: return jsonify({"erro": str(e)}), 500
 
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -844,7 +902,7 @@ def demandas_avulsas():
     if r_filtro != 'Todos': q += f" AND responsavel={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); demandas = c.fetchall()
     c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro)
+    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla)
 
 @app.route('/demandas/avulsas/editar', methods=['POST'])
 def editar_avulsa():
@@ -870,7 +928,7 @@ def demandas_rotinas():
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
     c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro)
+    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
 def upload_rotinas():
@@ -964,6 +1022,20 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Concluído'"); c_av = c.fetchone()[0]
     conc = c_rot + c_av
     
+    # CALCULADORA SLA DASHBOARD
+    c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
+    pendentes_rotina = c.fetchall()
+    c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
+    pendentes_avulsas = c.fetchall()
+    
+    todas_pendentes = pendentes_rotina + pendentes_avulsas
+    sla_atencao = 0; sla_urgente = 0; sla_critico = 0
+    for p in todas_pendentes:
+        s = calcular_sla(p[0], p[1])
+        if s >= 6: sla_critico += 1
+        elif s >= 4: sla_urgente += 1
+        elif s >= 2: sla_atencao += 1
+
     fig1, ax1 = plt.subplots(figsize=(6,4))
     c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to")
     dados_prod = c.fetchall()
@@ -982,7 +1054,7 @@ def dashboard_graficos():
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
-    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=0, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo)
+    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=0, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico)
 
 @app.route('/pentefino')
 def hub_pentefino():
