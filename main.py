@@ -44,7 +44,7 @@ TELA_LOGIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <div class="text-center mb-4"><h3 style="color: #004b87; font-weight: 800;">POSTAL SAÚDE</h3><p class="text-muted">Central de Operações (COCAP)</p></div>
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     <form method="POST" action="/">
-        <div class="mb-3"><label class="form-label fw-bold">Utilizador</label><input type="text" name="username" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label fw-bold">Usuário</label><input type="text" name="username" class="form-control" required></div>
         <div class="mb-4"><label class="form-label fw-bold">Senha</label><input type="password" name="password" class="form-control" required></div>
         <button type="submit" class="btn w-100 py-2" style="background-color: #004b87; color: white; font-weight: bold;">Entrar no Sistema</button>
     </form>
@@ -62,18 +62,18 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
     <div class="row justify-content-center gap-4">
         <div class="col-md-5">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controlo de Demandas</h4><p class="text-muted mb-4">Gira Rotinas, PDFs, Avulsas e aceda ao Dashboard.</p>
-                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2">Aceder ao Módulo</a>
+                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controle de Demandas</h4><p class="text-muted mb-4">Gerencie Rotinas, PDFs, Avulsas e acesse o Dashboard.</p>
+                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2">Acessar Módulo</a>
             </div>
         </div>
         <div class="col-md-5">
             <div class="card shadow-sm h-100 p-4 border-0">
                 <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1><h4>Pente Fino (RN 665)</h4><p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
-                <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2">Aceder ao Módulo</a>
+                <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2">Acessar Módulo</a>
             </div>
         </div>
     </div>
-    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-5"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Utilizadores)</a></div></div>{% endif %}
+    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-5"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a></div></div>{% endif %}
 </div></body></html>"""
 
 TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel Administrativo</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
@@ -84,17 +84,17 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <div class="row">
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white fw-bold">💾 Gestão da Base de Dados</div>
+                <div class="card-header bg-dark text-white fw-bold">💾 Gestão de Banco de Dados</div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-6 border-end">
-                            <h5 class="text-success">Exportar Backup</h5><a href="/admin/exportar" class="btn btn-success fw-bold w-75 mt-2">⬇ Descarregar Backup (Excel)</a>
+                            <h5 class="text-success">Exportar Backup</h5><a href="/admin/exportar" class="btn btn-success fw-bold w-75 mt-2">⬇ Baixar Backup (Excel)</a>
                         </div>
                         <div class="col-md-6">
-                            <h5 class="text-danger">Restaurar ou Migrar Base de Dados</h5>
+                            <h5 class="text-danger">Restaurar ou Migrar Banco de Dados</h5>
                             <form action="/admin/importar" method="POST" enctype="multipart/form-data" class="d-flex flex-column align-items-center mt-2">
                                 <input type="file" name="file_backup" class="form-control form-control-sm w-75 mb-2" accept=".xlsx,.db" required>
-                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações da Nuvem serão APAGADAS. Deseja continuar?');">⬆ Importar Ficheiro</button>
+                                <button type="submit" class="btn btn-danger fw-bold w-75" onclick="return confirm('ATENÇÃO: Todas as informações da Nuvem serão APAGADAS. Deseja continuar?');">⬆ Importar Arquivo</button>
                             </form>
                         </div>
                     </div>
@@ -103,22 +103,22 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
         </div>
         <div class="col-md-12">
             <div class="card shadow-sm mb-4 border-0">
-                <div class="card-body"><h5 class="card-title mb-3">Criar Novo Utilizador</h5>
+                <div class="card-body"><h5 class="card-title mb-3">Criar Novo Usuário</h5>
                     <form method="POST" action="/admin"><input type="hidden" name="acao" value="adicionar">
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-4"><label class="form-label small fw-bold">Utilizador</label><input type="text" name="username" class="form-control" required></div>
+                            <div class="col-md-4"><label class="form-label small fw-bold">Usuário</label><input type="text" name="username" class="form-control" required></div>
                             <div class="col-md-3"><label class="form-label small fw-bold">Senha</label><input type="password" name="password" class="form-control" required></div>
                             <div class="col-md-3"><label class="form-label small fw-bold">Nível</label><select name="role" class="form-select"><option value="user">User</option><option value="admin">Admin</option></select></div>
-                            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100 fw-bold">Gravar</button></div>
+                            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100 fw-bold">Salvar</button></div>
                         </div>
                     </form>
                 </div>
             </div>
             <div class="card shadow-sm border-0">
                 <div class="card-body">
-                    <table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>Utilizador</th><th>Nível</th><th>Ações</th></tr></thead>
+                    <table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>Usuário</th><th>Nível</th><th>Ações</th></tr></thead>
                         <tbody>{% for u in usuarios %}<tr><td>{{ u[0] }}</td><td>{{ u[1] }}</td><td><span class="badge bg-{{ 'dark' if u[2] == 'admin' else 'secondary' }}">{{ u[2] | upper }}</span></td><td>
-                            {% if u[1] != 'admin' and u[1] != user %}<form method="POST" action="/admin" style="display:inline;"><input type="hidden" name="acao" value="eliminar"><input type="hidden" name="user_id" value="{{ u[0] }}"><button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Eliminar o utilizador {{ u[1] }}?');">Excluir</button></form>
+                            {% if u[1] != 'admin' and u[1] != user %}<form method="POST" action="/admin" style="display:inline;"><input type="hidden" name="acao" value="eliminar"><input type="hidden" name="user_id" value="{{ u[0] }}"><button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Excluir o usuário {{ u[1] }}?');">Excluir</button></form>
                             {% else %}<span class="text-muted small">Sistema</span>{% endif %}</td></tr>{% endfor %}
                         </tbody>
                     </table>
@@ -167,28 +167,95 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
             </form>
         </div>
     </div>
+    
     <div class="card shadow-sm border-0"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-secondary fw-bold">Lista de Demandas</h5>
-            <span class="badge bg-primary fs-6">{{ demandas|length }} Registo(s) Encontrado(s)</span>
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Demandas <small>(Clique duplo na linha para Editar)</small></h5>
+            <span class="badge bg-primary fs-6">{{ demandas|length }} Registro(s) Encontrado(s)</span>
         </div>
         <div class="table-responsive">
-        <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em;">
+        <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.9em; cursor: pointer;">
             <thead class="table-dark"><tr><th>ID</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
-            <tbody>{% for d in demandas %}<tr>
+            <tbody>{% for d in demandas %}
+            <tr ondblclick="document.getElementById('btn-edit-avulsa-{{d[0]}}').click();">
                 <td>{{ d[0] }}</td><td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
                 <td><span class="badge bg-{{ 'warning text-dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'info' }}">{{ d[6] }}</span></td>
                 <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
                 <td>
                     <form method="POST" action="/demandas/avulsas" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
-                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>Assumir</button>
-                        <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %}>✔</button>
+                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Assumir">✋</button>
+                        <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Concluir">✔</button>
                     </form>
+                    <!-- Botão Editar Invisível/Visível que abre o Modal -->
+                    <button id="btn-edit-avulsa-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar" 
+                        data-id="{{ d[0] }}" data-tipo="{{ d[1] }}" data-assunto="{{ d[2] }}" data-sol="{{ d[3] }}" 
+                        data-prazo="{{ d[5] }}" data-status="{{ d[6] }}" data-resp="{{ d[7] }}" data-obs="{{ d[9] if d[9] else '' }}"
+                        onclick="abrirModalAvulsa(this)">✏️</button>
                 </td>
             </tr>{% endfor %}</tbody>
         </table>
     </div></div></div>
-</div></body></html>"""
+</div>
+
+<!-- Modal Edição Avulsa -->
+<div class="modal fade" id="modalEditAvulsa" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title fw-bold">✏️ Editar Demanda Avulsa</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/demandas/avulsas/editar">
+      <div class="modal-body">
+        <input type="hidden" name="id" id="edit_av_id">
+        <div class="row g-3">
+            <div class="col-md-6"><label class="form-label fw-bold">Tipo</label>
+                <select name="tipo" id="edit_av_tipo" class="form-select">{% for t in tipos %}<option value="{{t}}">{{t}}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-6"><label class="form-label fw-bold">Status</label>
+                <select name="status" id="edit_av_status" class="form-select">{% for s in status_list %}<option value="{{s}}">{{s}}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-12"><label class="form-label fw-bold">Assunto</label>
+                <input type="text" name="assunto" id="edit_av_assunto" class="form-control">
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">Solicitante</label>
+                <select name="solicitante" id="edit_av_sol" class="form-select">{% for s in sols %}<option value="{{s}}">{{s}}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">Responsável</label>
+                <select name="responsavel" id="edit_av_resp" class="form-select">{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">Prazo</label>
+                <input type="date" name="prazo" id="edit_av_prazo" class="form-control">
+            </div>
+            <div class="col-md-12"><label class="form-label fw-bold">Observações</label>
+                <textarea name="observacao" id="edit_av_obs" class="form-control" rows="3"></textarea>
+            </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success fw-bold">Salvar Alterações</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function abrirModalAvulsa(btn) {
+    document.getElementById('edit_av_id').value = btn.getAttribute('data-id');
+    document.getElementById('edit_av_tipo').value = btn.getAttribute('data-tipo');
+    document.getElementById('edit_av_assunto').value = btn.getAttribute('data-assunto');
+    document.getElementById('edit_av_sol').value = btn.getAttribute('data-sol');
+    document.getElementById('edit_av_prazo').value = btn.getAttribute('data-prazo');
+    document.getElementById('edit_av_status').value = btn.getAttribute('data-status');
+    document.getElementById('edit_av_resp').value = btn.getAttribute('data-resp');
+    document.getElementById('edit_av_obs').value = btn.getAttribute('data-obs');
+    new bootstrap.Modal(document.getElementById('modalEditAvulsa')).show();
+}
+</script>
+</body></html>"""
 
 TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -212,32 +279,118 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <form method="POST" action="/demandas/rotinas/upload" enctype="multipart/form-data" class="d-flex justify-content-center align-items-center gap-3">
                 <span class="text-primary fw-bold">Importar PDFs:</span>
                 <input type="file" name="pdfs" class="form-control w-25" multiple accept=".pdf" required>
-                <button type="submit" class="btn btn-primary fw-bold px-4">Processar Ficheiros</button>
+                <button type="submit" class="btn btn-primary fw-bold px-4">Processar Arquivos</button>
             </form>
         </div>
     </div>
+    
     <div class="card shadow-sm border-0"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos</h5>
-            <span class="badge bg-primary fs-6">{{ rotinas|length }} Registo(s) Encontrado(s)</span>
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small>(Clique duplo na linha para Editar)</small></h5>
+            <span class="badge bg-primary fs-6">{{ rotinas|length }} Registro(s) Encontrado(s)</span>
         </div>
         <div class="table-responsive">
-        <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em;">
+        <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em; cursor: pointer;">
             <thead class="table-dark"><tr><th>ID</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
-            <tbody>{% for d in rotinas %}<tr>
+            <tbody>{% for d in rotinas %}
+            <tr ondblclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">
                 <td>{{ d[0] }}</td><td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
                 <td><span class="badge bg-{{ 'warning text-dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
                 <td>{{ d[4] }}</td>
                 <td>
                     <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
-                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Assumir</button>
-                        <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %}>Finalizar</button>
+                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Assumir">✋</button>
+                        <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
+                    <!-- Botão Editar -->
+                    <button id="btn-edit-rot-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Informações"
+                        data-id="{{ d[0] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
+                        data-perc="{{ d[13] if d[13] else '' }}" data-rs="{{ d[14] if d[14] else '' }}" data-nup="{{ d[15] if d[15] else '' }}"
+                        data-proc="{{ d[16] if d[16] else '' }}" data-fop="{{ d[17] if d[17] else '' }}" data-obs="{{ d[22] if d[22] else '' }}"
+                        data-resp="{{ d[4] }}"
+                        onclick="abrirModalRotina(this)">✏️</button>
                 </td>
             </tr>{% endfor %}</tbody>
         </table>
     </div></div></div>
-</div></body></html>"""
+</div>
+
+<!-- Modal Edição Rotina (PDFs) -->
+<div class="modal fade" id="modalEditRotina" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title fw-bold">✏️ Completar Informações da Demanda</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/demandas/rotinas/editar">
+      <div class="modal-body">
+        <input type="hidden" name="id" id="edit_rot_id">
+        <div class="row g-3">
+            <div class="col-md-4"><label class="form-label fw-bold">Responsável Atual</label>
+                <select name="responsavel" id="edit_rot_resp" class="form-select">{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">NUP / e-Doc</label>
+                <input type="text" name="nup_edoc" id="edit_rot_nup" class="form-control">
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">FOP Autorização</label>
+                <input type="text" name="fop_autorizacao" id="edit_rot_fop" class="form-control">
+            </div>
+            
+            <div class="col-md-4"><label class="form-label fw-bold">Tipo Negociação</label>
+                <select name="tipo_negociacao" id="edit_rot_tipo" class="form-select">
+                    <option value="">Selecione...</option><option value="DIFERENCIADA">DIFERENCIADA</option><option value="MISTA">MISTA</option><option value="ESTADO">ESTADO</option><option value="NÃO IDENTIFICADA">NÃO IDENTIFICADA</option>
+                </select>
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">Alçada</label>
+                <select name="alcada" id="edit_rot_alcada" class="form-select">
+                    <option value="">Selecione...</option><option value="GERED">GERED</option><option value="REGIONAL">REGIONAL</option><option value="CONEC">CONEC</option><option value="DIOPE">DIOPE</option><option value="CODER">CODER</option>
+                </select>
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">Tipo Processo</label>
+                <select name="tipo_processo" id="edit_rot_proc" class="form-select">
+                    <option value="">Selecione...</option><option value="PARAMETRIZADO">PARAMETRIZADO</option><option value="AGUARDANDO RETORNO">AGUARDANDO RETORNO</option><option value="DEVOLVIDO">DEVOLVIDO</option><option value="NÃO LOCALIZADO">NÃO LOCALIZADO</option>
+                </select>
+            </div>
+
+            <div class="col-md-6"><label class="form-label fw-bold">Impacto (%)</label>
+                <input type="text" name="impacto_perc" id="edit_rot_perc" class="form-control" placeholder="Ex: 5,4%">
+            </div>
+            <div class="col-md-6"><label class="form-label fw-bold">Impacto (R$)</label>
+                <input type="text" name="impacto_rs" id="edit_rot_rs" class="form-control" placeholder="Ex: 15000,00">
+            </div>
+            
+            <div class="col-md-12"><label class="form-label fw-bold">Observações</label>
+                <textarea name="observacao" id="edit_rot_obs" class="form-control" rows="3"></textarea>
+            </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success fw-bold">Salvar Informações</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function abrirModalRotina(btn) {
+    document.getElementById('edit_rot_id').value = btn.getAttribute('data-id');
+    document.getElementById('edit_rot_tipo').value = btn.getAttribute('data-tipo');
+    document.getElementById('edit_rot_alcada').value = btn.getAttribute('data-alcada');
+    document.getElementById('edit_rot_perc').value = btn.getAttribute('data-perc');
+    document.getElementById('edit_rot_rs').value = btn.getAttribute('data-rs');
+    document.getElementById('edit_rot_nup').value = btn.getAttribute('data-nup');
+    document.getElementById('edit_rot_proc').value = btn.getAttribute('data-proc');
+    document.getElementById('edit_rot_fop').value = btn.getAttribute('data-fop');
+    document.getElementById('edit_rot_obs').value = btn.getAttribute('data-obs');
+    document.getElementById('edit_rot_resp').value = btn.getAttribute('data-resp');
+    new bootstrap.Modal(document.getElementById('modalEditRotina')).show();
+}
+</script>
+</body></html>"""
 
 TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dashboard Gerencial</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -261,18 +414,15 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
 <div class="container mt-5 text-center">
     <div class="row justify-content-center">
         <div class="col-md-5 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-warning" style="font-size: 3rem;">🌍</h1><h4 class="fw-bold text-secondary">Cruzamento Regional em Massa</h4><p class="text-muted">Análise de cobertura completa comparando a Postal com a Operadora Intermediária.</p><a href="/pentefino/regional" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
+            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-warning" style="font-size: 3rem;">🌍</h1><h4 class="fw-bold text-secondary">Cruzamento Regional em Massa</h4><p class="text-muted">Análise de cobertura completa comparando a Postal com a Operadora Intermediária.</p><a href="/pentefino/regional" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Acessar</a></div>
         </div>
         <div class="col-md-5 mb-4">
-            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente usando Nome ou CNPJ.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Aceder</a></div>
+            <div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3 text-danger" style="font-size: 3rem;">🎯</h1><h4 class="fw-bold text-secondary">Busca Individual (Sniper)</h4><p class="text-muted">Procure substitutos internamente e avalie o Pool da Região.</p><a href="/pentefino/individual" class="btn btn-danger text-white w-100 py-3 fw-bold fs-6">Acessar</a></div>
         </div>
     </div>
 </div></body></html>"""
 
-# ==================================
-# TELAS DO PENTE FINO COM PROGRESS BAR
-# ==================================
-
+# TELA REGIONAL
 TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
@@ -344,7 +494,6 @@ function lerCabecalho(input, selectId1, selectId2) {
 }
 </script>
 </body></html>"""
-
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -450,7 +599,7 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
             <h4 class="fw-bold mb-1">✅ Análise Concluída!</h4>
             <p class="mb-0 text-dark">Alvo: <strong>{{ alvo_nome }}</strong> ({{ alvo_cnpj }})</p>
         </div>
-        <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Descarregar Planilha Completa (Excel)</a>
+        <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Baixar Planilha Completa (Excel)</a>
     </div>
 
     <div class="card shadow-sm border-0 mt-4">
@@ -485,11 +634,9 @@ def normalizar_texto(texto):
     return ''.join(c for c in unicodedata.normalize('NFD', str(texto)) if unicodedata.category(c) != 'Mn').upper().strip()
 
 def cacador_de_colunas(df, palavras_chave):
-    # Alteração Crítica de Prioridade: Busca exata 100% igual primeiro
     for k in palavras_chave:
         for col in df.columns:
             if k == str(col).strip().upper(): return col
-    # Só depois, busca por aproximação
     for k in palavras_chave:
         for col in df.columns:
             if k in str(col).strip().upper(): return col
@@ -524,7 +671,6 @@ def ler_arquivo(file_obj, nrows=None):
 # ROTAS DO SERVIDOR WEB E APIs INVISÍVEIS
 # ==========================================
 
-# API 1: Ler Cabeçalhos do Excel rapidamente
 @app.route('/api/ler_cabecalhos', methods=['POST'])
 def api_ler_cabecalhos():
     if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
@@ -535,7 +681,6 @@ def api_ler_cabecalhos():
         return jsonify({"colunas": [str(c).strip().upper() for c in df.columns]})
     except Exception as e: return jsonify({"erro": str(e)}), 500
 
-# API 2: Extrair Nomes/CNPJ e Tipos de Prestador
 @app.route('/api/carregar_alvos', methods=['POST'])
 def api_carregar_alvos():
     if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
@@ -547,7 +692,6 @@ def api_carregar_alvos():
         
         col_cnpj = cacador_de_colunas(df, ['CNPJ', 'CPFCNPJ'])
         col_nome = cacador_de_colunas(df, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
-        # Mapeamento CORRIGIDO: TIPOPRESTADOR em 1º lugar.
         col_tipo = cacador_de_colunas(df, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA'])
         
         if not col_cnpj or not col_nome: return jsonify({"erro": "Colunas de Nome ou CNPJ não encontradas"})
@@ -586,7 +730,7 @@ def login():
         if res:
             session['user'] = user; session['role'] = res[1]
             return redirect(url_for('dashboard'))
-        else: flash("Utilizador ou senha incorretos!", "danger")
+        else: flash("Usuário ou senha incorretos!", "danger")
     return render_template_string(TELA_LOGIN)
 
 @app.route('/dashboard')
@@ -609,12 +753,12 @@ def admin():
             u = request.form.get('username'); p = request.form.get('password'); r = request.form.get('role')
             try:
                 c.execute(f"INSERT INTO users (username, password, role, first_login) VALUES ({ph}, {ph}, {ph}, 1)", (u, p, r))
-                conn.commit(); flash(f"Utilizador '{u}' criado com sucesso!", "success")
-            except Exception: conn.rollback(); flash("Erro: Nome de utilizador já existe!", "danger")
+                conn.commit(); flash(f"Usuário '{u}' criado com sucesso!", "success")
+            except Exception: conn.rollback(); flash("Erro: Nome de usuário já existe!", "danger")
         elif acao == 'eliminar':
             uid = request.form.get('user_id')
             c.execute(f"DELETE FROM users WHERE id={ph}", (uid,))
-            conn.commit(); flash("Utilizador excluído com sucesso!", "warning")
+            conn.commit(); flash("Usuário excluído com sucesso!", "warning")
     c.execute("SELECT id, username, role, first_login FROM users ORDER BY id ASC")
     usuarios = c.fetchall(); conn.close()
     return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios)
@@ -641,7 +785,7 @@ def exportar_backup():
 def importar_backup():
     if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
     file = request.files.get('file_backup')
-    if not file: flash("Nenhum ficheiro selecionado.", "danger"); return redirect(url_for('admin'))
+    if not file: flash("Nenhum arquivo selecionado.", "danger"); return redirect(url_for('admin'))
     filename = file.filename.lower()
     try:
         conn = conectar_db(); c = conn.cursor(); is_postgres = "psycopg2" in str(type(conn))
@@ -702,6 +846,19 @@ def demandas_avulsas():
     c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
     return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro)
 
+@app.route('/demandas/avulsas/editar', methods=['POST'])
+def editar_avulsa():
+    if 'user' not in session: return redirect(url_for('login'))
+    d_id = request.form.get('id'); tipo = request.form.get('tipo'); assunto = request.form.get('assunto')
+    solicitante = request.form.get('solicitante'); prazo = request.form.get('prazo'); status = request.form.get('status')
+    resp = request.form.get('responsavel'); obs = request.form.get('observacao')
+
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph} WHERE id={ph}",
+              (tipo, assunto, solicitante, prazo, status, resp, obs, d_id))
+    conn.commit(); conn.close(); flash("Demanda Avulsa atualizada com sucesso!", "success")
+    return redirect(url_for('demandas_avulsas'))
+
 @app.route('/demandas/rotinas')
 def demandas_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
@@ -719,7 +876,7 @@ def demandas_rotinas():
 def upload_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
     arquivos = request.files.getlist('pdfs')
-    if not arquivos or arquivos[0].filename == '': flash("Nenhum ficheiro selecionado.", "warning"); return redirect(url_for('demandas_rotinas'))
+    if not arquivos or arquivos[0].filename == '': flash("Nenhum arquivo selecionado.", "warning"); return redirect(url_for('demandas_rotinas'))
     kw = {"REAJUSTE": "Reajuste", "NOVO CONTRATO": "Novo Contrato", "INCLUSÃO": "Inclusão", "EXCLUSÃO": "Exclusão", "AJUSTE": "Ajuste", "EXTENSÃO": "Extensão", "DESCREDENCIAMENTO": "Descredenciamento"}
     valid_ufs = {'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'}
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn); count = 0
@@ -777,6 +934,20 @@ def acao_rotinas():
     if acao == 'assumir': c.execute(f"UPDATE demands SET status='Em Análise', assigned_to={ph} WHERE id={ph}", (session['user'], d_id))
     elif acao == 'finalizar': c.execute(f"UPDATE demands SET status='Finalizada', data_finalizacao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y %H:%M"), d_id))
     conn.commit(); conn.close()
+    return redirect(url_for('demandas_rotinas'))
+
+@app.route('/demandas/rotinas/editar', methods=['POST'])
+def editar_rotina():
+    if 'user' not in session: return redirect(url_for('login'))
+    d_id = request.form.get('id'); tipo_neg = request.form.get('tipo_negociacao'); alcada = request.form.get('alcada')
+    perc = request.form.get('impacto_perc'); rs = request.form.get('impacto_rs'); nup = request.form.get('nup_edoc')
+    proc = request.form.get('tipo_processo'); fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
+    resp = request.form.get('responsavel')
+
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    c.execute(f"UPDATE demands SET assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, observacao={ph} WHERE id={ph}",
+              (resp, tipo_neg, alcada, perc, rs, nup, proc, fop, obs, d_id))
+    conn.commit(); conn.close(); flash("Informações do processo atualizadas com sucesso!", "success")
     return redirect(url_for('demandas_rotinas'))
 
 @app.route('/demandas/dashboard_graficos')
@@ -1014,6 +1185,7 @@ def pentefino_individual():
             else: continue
             
             tipo_cand = str(row.get(col_tipo_ind, '')).strip().upper() if col_tipo_ind else "-"
+            
             if filtro_tipo == "MESMO TIPO DO ALVO" and tipo_cand != tipo_alvo: continue
             elif filtro_tipo and filtro_tipo != "MESMO TIPO DO ALVO" and tipo_cand != filtro_tipo: continue
                 
