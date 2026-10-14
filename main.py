@@ -23,18 +23,28 @@ setup_db()
 def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
+# ==========================================
+# MOTOR DE CÁLCULO DE SLA
+# ==========================================
 def calcular_sla(data_str, status):
     if not data_str or status in ['Concluído', 'Finalizada', 'Cancelada']:
         return -1 
     try:
-        if len(str(data_str).strip()) > 10:
-            dt = datetime.strptime(str(data_str).strip(), "%d/%m/%Y %H:%M")
+        ds = str(data_str).strip()
+        if not ds or ds.upper() in ['NONE', 'NAN', '']: return -1
+        
+        # Aceita formato de formulário Web (YYYY-MM-DD) ou Sistema (DD/MM/YYYY HH:MM)
+        if '-' in ds:
+            dt = datetime.strptime(ds, "%Y-%m-%d")
+        elif len(ds) > 10:
+            dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
         else:
-            dt = datetime.strptime(str(data_str).strip(), "%d/%m/%Y")
+            dt = datetime.strptime(ds, "%d/%m/%Y")
+            
         dias = (datetime.now() - dt).days
         return dias if dias >= 0 else 0
     except:
-        return 0
+        return -1
 
 # ==========================================
 # LISTAS GLOBAIS E CONSTANTES
@@ -97,7 +107,7 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <div class="row">
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white fw-bold">💾 Gestão de Banco de Dados</div>
+                <div class="card-header bg-dark text-white fw-bold">💾 Gestão do Banco de Dados</div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-6 border-end">
@@ -219,6 +229,7 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Concluir">✔</button>
                     </form>
+                    <!-- Botão Editar Invisível/Visível que abre o Modal -->
                     <button id="btn-edit-avulsa-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar" 
                         data-id="{{ d[0] }}" data-tipo="{{ d[1] }}" data-assunto="{{ d[2] }}" data-sol="{{ d[3] }}" 
                         data-prazo="{{ d[5] }}" data-status="{{ d[6] }}" data-resp="{{ d[7] }}" data-obs="{{ d[9] if d[9] else '' }}"
@@ -329,21 +340,34 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
         </div>
         <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em; cursor: pointer;">
-            <thead class="table-dark"><tr><th>ID</th><th>SLA (Dias)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
+            <thead class="table-dark"><tr><th>ID</th><th>SLA (COCAP / FOP)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
             <tbody>{% for d in rotinas %}
-            {% set sla = calc_sla(d[9], d[3]) %}
+            <!-- SLA COCAP (Baseado na Entrada) para as cores -->
+            {% set sla_cocap = calc_sla(d[9], d[3]) %}
+            {% set sla_geral = calc_sla(d[18], d[3]) %}
+            
             {% set row_class = '' %}
-            {% if sla >= 6 %}{% set row_class = 'bg-critico' %}
-            {% elif sla >= 4 %}{% set row_class = 'bg-urgente' %}
-            {% elif sla >= 2 %}{% set row_class = 'bg-atencao' %}
+            {% if sla_cocap >= 6 %}{% set row_class = 'bg-critico' %}
+            {% elif sla_cocap >= 4 %}{% set row_class = 'bg-urgente' %}
+            {% elif sla_cocap >= 2 %}{% set row_class = 'bg-atencao' %}
             {% endif %}
             <tr class="{{ row_class }}" ondblclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">
                 <td class="fw-bold">{{ d[0] }}</td>
                 <td>
-                    {% if sla >= 0 %}
-                        <span class="badge bg-{{ 'danger' if sla >= 6 else 'warning text-dark' if sla >= 4 else 'secondary' }}">{{ sla }} dia(s)</span>
+                    <!-- SLA COCAP -->
+                    {% if sla_cocap >= 0 %}
+                        <span class="badge bg-{{ 'danger' if sla_cocap >= 6 else 'warning text-dark' if sla_cocap >= 4 else 'secondary' }} mb-1">COCAP: {{ sla_cocap }}d</span><br>
                     {% else %}
-                        <span class="text-muted fw-bold">-</span>
+                        <span class="badge bg-success mb-1">COCAP: OK</span><br>
+                    {% endif %}
+                    
+                    <!-- SLA GERAL FOP -->
+                    {% if sla_geral >= 0 %}
+                        <span class="badge bg-{{ 'danger' if sla_geral >= 15 else 'warning text-dark' if sla_geral >= 10 else 'secondary' }}">Geral: {{ sla_geral }}d</span>
+                    {% elif d[18] and d[3] in ['Finalizada', 'Concluído'] %}
+                        <span class="badge bg-success">Geral: OK</span>
+                    {% else %}
+                        <span class="badge bg-light text-muted border">Geral: -</span>
                     {% endif %}
                 </td>
                 <td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
@@ -354,10 +378,12 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
+                    <!-- Botão Editar -->
                     <button id="btn-edit-rot-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Informações"
                         data-id="{{ d[0] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
                         data-perc="{{ d[13] if d[13] else '' }}" data-rs="{{ d[14] if d[14] else '' }}" data-nup="{{ d[15] if d[15] else '' }}"
-                        data-proc="{{ d[16] if d[16] else '' }}" data-fop="{{ d[17] if d[17] else '' }}" data-obs="{{ d[22] if d[22] else '' }}"
+                        data-proc="{{ d[16] if d[16] else '' }}" data-fop="{{ d[17] if d[17] else '' }}" 
+                        data-fop-date="{{ d[18] if d[18] else '' }}" data-obs="{{ d[22] if d[22] else '' }}"
                         data-resp="{{ d[4] }}"
                         onclick="abrirModalRotina(this)">✏️</button>
                 </td>
@@ -378,14 +404,14 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
       <div class="modal-body">
         <input type="hidden" name="id" id="edit_rot_id">
         <div class="row g-3">
-            <div class="col-md-4"><label class="form-label fw-bold">Responsável Atual</label>
-                <select name="responsavel" id="edit_rot_resp" class="form-select">{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
+            <div class="col-md-4"><label class="form-label fw-bold text-primary">Responsável Atual</label>
+                <select name="responsavel" id="edit_rot_resp" class="form-select border-primary">{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
             </div>
             <div class="col-md-4"><label class="form-label fw-bold">NUP / e-Doc</label>
                 <input type="text" name="nup_edoc" id="edit_rot_nup" class="form-control">
             </div>
-            <div class="col-md-4"><label class="form-label fw-bold">FOP Autorização</label>
-                <input type="text" name="fop_autorizacao" id="edit_rot_fop" class="form-control">
+            <div class="col-md-4"><label class="form-label fw-bold text-danger">Data Assin. FOP (SLA Geral)</label>
+                <input type="date" name="data_aprovacao" id="edit_rot_data_fop" class="form-control border-danger">
             </div>
             
             <div class="col-md-4"><label class="form-label fw-bold">Tipo Negociação</label>
@@ -404,10 +430,13 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                 </select>
             </div>
 
-            <div class="col-md-6"><label class="form-label fw-bold">Impacto (%)</label>
+            <div class="col-md-4"><label class="form-label fw-bold">FOP Autorização (Nº)</label>
+                <input type="text" name="fop_autorizacao" id="edit_rot_fop" class="form-control">
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">Impacto (%)</label>
                 <input type="text" name="impacto_perc" id="edit_rot_perc" class="form-control" placeholder="Ex: 5,4%">
             </div>
-            <div class="col-md-6"><label class="form-label fw-bold">Impacto (R$)</label>
+            <div class="col-md-4"><label class="form-label fw-bold">Impacto (R$)</label>
                 <input type="text" name="impacto_rs" id="edit_rot_rs" class="form-control" placeholder="Ex: 15000,00">
             </div>
             
@@ -436,6 +465,15 @@ function abrirModalRotina(btn) {
     document.getElementById('edit_rot_nup').value = btn.getAttribute('data-nup');
     document.getElementById('edit_rot_proc').value = btn.getAttribute('data-proc');
     document.getElementById('edit_rot_fop').value = btn.getAttribute('data-fop');
+    
+    // Tratamento para data input type=date (YYYY-MM-DD)
+    let dStr = btn.getAttribute('data-fop-date');
+    if (dStr && dStr.includes('/')) {
+        let parts = dStr.split(' ')[0].split('/');
+        if (parts.length === 3) dStr = parts[2] + '-' + parts[1] + '-' + parts[0];
+    }
+    document.getElementById('edit_rot_data_fop').value = dStr;
+    
     document.getElementById('edit_rot_obs').value = btn.getAttribute('data-obs');
     document.getElementById('edit_rot_resp').value = btn.getAttribute('data-resp');
     new bootstrap.Modal(document.getElementById('modalEditRotina')).show();
@@ -454,7 +492,7 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
     </div>
     
-    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA (Pendentes)</h5>
+    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA COCAP (Pendentes)</h5>
     <div class="row text-center mt-3 mb-4">
         <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h5 class="mb-1">Atenção (2 a 3 dias)</h5><h2 class="fw-bold">{{ sla_atencao }}</h2></div></div>
         <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h5 class="mb-1">Urgente (4 a 5 dias)</h5><h2 class="fw-bold">{{ sla_urgente }}</h2></div></div>
@@ -481,7 +519,6 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-# TELA REGIONAL
 TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
@@ -553,6 +590,7 @@ function lerCabecalho(input, selectId1, selectId2) {
 }
 </script>
 </body></html>"""
+
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -1000,11 +1038,11 @@ def editar_rotina():
     d_id = request.form.get('id'); tipo_neg = request.form.get('tipo_negociacao'); alcada = request.form.get('alcada')
     perc = request.form.get('impacto_perc'); rs = request.form.get('impacto_rs'); nup = request.form.get('nup_edoc')
     proc = request.form.get('tipo_processo'); fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
-    resp = request.form.get('responsavel')
+    resp = request.form.get('responsavel'); data_fop = request.form.get('data_aprovacao')
 
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    c.execute(f"UPDATE demands SET assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, observacao={ph} WHERE id={ph}",
-              (resp, tipo_neg, alcada, perc, rs, nup, proc, fop, obs, d_id))
+    c.execute(f"UPDATE demands SET assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph} WHERE id={ph}",
+              (resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, d_id))
     conn.commit(); conn.close(); flash("Informações do processo atualizadas com sucesso!", "success")
     return redirect(url_for('demandas_rotinas'))
 
@@ -1022,7 +1060,6 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Concluído'"); c_av = c.fetchone()[0]
     conc = c_rot + c_av
     
-    # CALCULADORA SLA DASHBOARD
     c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
     pendentes_rotina = c.fetchall()
     c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
