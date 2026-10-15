@@ -23,28 +23,18 @@ setup_db()
 def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
-# ==========================================
-# MOTOR DE CÁLCULO DE SLA
-# ==========================================
 def calcular_sla(data_str, status):
     if not data_str or status in ['Concluído', 'Finalizada', 'Cancelada']:
         return -1 
     try:
         ds = str(data_str).strip()
         if not ds or ds.upper() in ['NONE', 'NAN', '']: return -1
-        
-        # Aceita formato de formulário Web (YYYY-MM-DD) ou Sistema (DD/MM/YYYY HH:MM)
-        if '-' in ds:
-            dt = datetime.strptime(ds, "%Y-%m-%d")
-        elif len(ds) > 10:
-            dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
-        else:
-            dt = datetime.strptime(ds, "%d/%m/%Y")
-            
+        if '-' in ds: dt = datetime.strptime(ds, "%Y-%m-%d")
+        elif len(ds) > 10: dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
+        else: dt = datetime.strptime(ds, "%d/%m/%Y")
         dias = (datetime.now() - dt).days
         return dias if dias >= 0 else 0
-    except:
-        return -1
+    except: return -1
 
 # ==========================================
 # LISTAS GLOBAIS E CONSTANTES
@@ -229,7 +219,6 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Concluir">✔</button>
                     </form>
-                    <!-- Botão Editar Invisível/Visível que abre o Modal -->
                     <button id="btn-edit-avulsa-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar" 
                         data-id="{{ d[0] }}" data-tipo="{{ d[1] }}" data-assunto="{{ d[2] }}" data-sol="{{ d[3] }}" 
                         data-prazo="{{ d[5] }}" data-status="{{ d[6] }}" data-resp="{{ d[7] }}" data-obs="{{ d[9] if d[9] else '' }}"
@@ -342,7 +331,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em; cursor: pointer;">
             <thead class="table-dark"><tr><th>ID</th><th>SLA (COCAP / FOP)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
             <tbody>{% for d in rotinas %}
-            <!-- SLA COCAP (Baseado na Entrada) para as cores -->
             {% set sla_cocap = calc_sla(d[9], d[3]) %}
             {% set sla_geral = calc_sla(d[18], d[3]) %}
             
@@ -354,14 +342,12 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <tr class="{{ row_class }}" ondblclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">
                 <td class="fw-bold">{{ d[0] }}</td>
                 <td>
-                    <!-- SLA COCAP -->
                     {% if sla_cocap >= 0 %}
                         <span class="badge bg-{{ 'danger' if sla_cocap >= 6 else 'warning text-dark' if sla_cocap >= 4 else 'secondary' }} mb-1">COCAP: {{ sla_cocap }}d</span><br>
                     {% else %}
                         <span class="badge bg-success mb-1">COCAP: OK</span><br>
                     {% endif %}
                     
-                    <!-- SLA GERAL FOP -->
                     {% if sla_geral >= 0 %}
                         <span class="badge bg-{{ 'danger' if sla_geral >= 15 else 'warning text-dark' if sla_geral >= 10 else 'secondary' }}">Geral: {{ sla_geral }}d</span>
                     {% elif d[18] and d[3] in ['Finalizada', 'Concluído'] %}
@@ -378,7 +364,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
-                    <!-- Botão Editar -->
                     <button id="btn-edit-rot-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Informações"
                         data-id="{{ d[0] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
                         data-perc="{{ d[13] if d[13] else '' }}" data-rs="{{ d[14] if d[14] else '' }}" data-nup="{{ d[15] if d[15] else '' }}"
@@ -392,7 +377,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     </div></div></div>
 </div>
 
-<!-- Modal Edição Rotina (PDFs) -->
+<!-- Modal Edição Rotina -->
 <div class="modal fade" id="modalEditRotina" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
@@ -466,14 +451,12 @@ function abrirModalRotina(btn) {
     document.getElementById('edit_rot_proc').value = btn.getAttribute('data-proc');
     document.getElementById('edit_rot_fop').value = btn.getAttribute('data-fop');
     
-    // Tratamento para data input type=date (YYYY-MM-DD)
     let dStr = btn.getAttribute('data-fop-date');
     if (dStr && dStr.includes('/')) {
         let parts = dStr.split(' ')[0].split('/');
         if (parts.length === 3) dStr = parts[2] + '-' + parts[1] + '-' + parts[0];
     }
     document.getElementById('edit_rot_data_fop').value = dStr;
-    
     document.getElementById('edit_rot_obs').value = btn.getAttribute('data-obs');
     document.getElementById('edit_rot_resp').value = btn.getAttribute('data-resp');
     new bootstrap.Modal(document.getElementById('modalEditRotina')).show();
@@ -519,7 +502,8 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
@@ -590,7 +574,6 @@ function lerCabecalho(input, selectId1, selectId2) {
 }
 </script>
 </body></html>"""
-
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -698,7 +681,17 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         </div>
         <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Baixar Planilha Completa (Excel)</a>
     </div>
+    
+    <!-- Linha POOL DA REGIÃO -->
+    <div class="alert alert-warning shadow-sm border-warning mt-3">
+        <h5 class="fw-bold text-dark mb-1">⭐ Avaliação do Pool da Região ({{ regiao_alvo }})</h5>
+        <p class="mb-0 text-dark"><strong>Status:</strong> {{ pool_status }}</p>
+        {% if pool_faltantes != 'A soma de todos os prestadores da região cobre as especialidades.' %}
+        <hr><p class="mb-0 text-danger fw-bold small" style="white-space: pre-wrap;">{{ pool_faltantes }}</p>
+        {% endif %}
+    </div>
 
+    <!-- Tabela 1: 100% de Cobertura -->
     <div class="card shadow-sm border-0 mt-4">
         <div class="card-header bg-primary text-white fw-bold fs-5">🏆 Prestadores Internos com 100% de Cobertura (Zero Vulnerabilidades)</div>
         <div class="card-body p-0">
@@ -712,13 +705,37 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
                             <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td><td>{{ r[5] }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center text-muted py-4 fs-5">Nenhum prestador interno com 100% de cobertura encontrado.<br>Baixe a planilha acima para avaliar os prestadores parciais e o Pool da Região.</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4 fs-5">Nenhum prestador interno com 100% de cobertura encontrado.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
+    
+    <!-- Tabela 2: Vulneráveis -->
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-header bg-danger text-white fw-bold fs-5">⚠️ Prestadores com Cobertura Parcial (Vulneráveis)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center" style="font-size: 0.9em;">
+                    <thead class="table-light"><tr><th>Proximidade</th><th>CNPJ</th><th class="text-start">Prestador</th><th>Município/UF</th><th class="text-start">Especialidades Faltantes</th></tr></thead>
+                    <tbody>
+                        {% for r in resultados_vul %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ r[2] }}</span></td>
+                            <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td>
+                            <td class="text-start text-danger small" style="white-space: pre-wrap;">{{ r[8] }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-4 fs-5">Todos os prestadores encontrados possuem 100% de cobertura!</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
     <div class="text-center mt-4 mb-5"><a href="/pentefino/individual" class="btn btn-secondary px-4 fw-bold">Fazer Nova Busca</a></div>
 </div></body></html>"""
 
@@ -1053,9 +1070,15 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
     total = t_rotina + t_avulsa
-    c.execute("SELECT COUNT(*) FROM demands WHERE status IN ('Pendente', 'Em Análise')"); p_rot = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status IN ('Pendente', 'Em Análise')"); p_av = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')"); p_rot = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')"); p_av = c.fetchone()[0]
     pend = p_rot + p_av
+    
+    c.execute("SELECT COUNT(*) FROM demands WHERE status='Em Análise'"); a_rot = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Em Análise'"); a_av = c.fetchone()[0]
+    em_ana = a_rot + a_av
+    
     c.execute("SELECT COUNT(*) FROM demands WHERE status='Finalizada'"); c_rot = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Concluído'"); c_av = c.fetchone()[0]
     conc = c_rot + c_av
@@ -1091,7 +1114,7 @@ def dashboard_graficos():
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
-    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=0, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico)
+    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=em_ana, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico)
 
 @app.route('/pentefino')
 def hub_pentefino():
@@ -1349,9 +1372,10 @@ def pentefino_individual():
 
         wb.save(output); output.seek(0)
         resultados_100 = [r for r in resultados if r[1] == 0]
+        resultados_vul = [r for r in resultados if r[1] > 0] # Adicionado para a tela!
         b64_data = base64.b64encode(output.getvalue()).decode('utf-8')
         
-        return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, resultados_100=resultados_100)
+        return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, resultados_100=resultados_100, resultados_vul=resultados_vul, regiao_alvo=regiao_alvo, pool_status=status_pool, pool_faltantes=txt_faltante_pool)
     except Exception as e: flash(f"Erro ao processar as planilhas: {e}", "danger"); return redirect(url_for('pentefino_individual'))
 
 if __name__ == '__main__':
