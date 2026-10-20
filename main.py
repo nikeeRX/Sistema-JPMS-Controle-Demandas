@@ -23,18 +23,28 @@ setup_db()
 def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
+# ==========================================
+# MOTOR DE CÁLCULO DE SLA
+# ==========================================
 def calcular_sla(data_str, status):
     if not data_str or status in ['Concluído', 'Finalizada', 'Cancelada']:
         return -1 
     try:
         ds = str(data_str).strip()
         if not ds or ds.upper() in ['NONE', 'NAN', '']: return -1
-        if '-' in ds: dt = datetime.strptime(ds, "%Y-%m-%d")
-        elif len(ds) > 10: dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
-        else: dt = datetime.strptime(ds, "%d/%m/%Y")
+        
+        # Aceita formato de formulário Web (YYYY-MM-DD) ou Sistema (DD/MM/YYYY HH:MM)
+        if '-' in ds:
+            dt = datetime.strptime(ds, "%Y-%m-%d")
+        elif len(ds) > 10:
+            dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
+        else:
+            dt = datetime.strptime(ds, "%d/%m/%Y")
+            
         dias = (datetime.now() - dt).days
         return dias if dias >= 0 else 0
-    except: return -1
+    except:
+        return -1
 
 # ==========================================
 # LISTAS GLOBAIS E CONSTANTES
@@ -97,7 +107,7 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <div class="row">
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white fw-bold">💾 Gestão de Banco de Dados</div>
+                <div class="card-header bg-dark text-white fw-bold">💾 Gestão do Banco de Dados</div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-6 border-end">
@@ -464,12 +474,12 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
 <div class="container mt-4">
     <div class="row text-center mb-2">
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-primary text-white p-3"><h5 class="mb-1">Total Demandas</h5><h2 class="fw-bold">{{ d_total }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes Gerais</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes (Novas)</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-info text-white p-3"><h5 class="mb-1">Em Análise</h5><h2 class="fw-bold">{{ d_ana }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
     </div>
     
-    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA COCAP (Baseado em {{ d_pend }} Pendências)</h5>
+    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA COCAP (Demandas Ativas: {{ total_ativas }})</h5>
     <div class="row text-center mt-3 mb-4">
         <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h5 class="mb-1">Atenção (2 a 3 dias)</h5><h2 class="fw-bold">{{ sla_atencao }}</h2></div></div>
         <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h5 class="mb-1">Urgente (4 a 5 dias)</h5><h2 class="fw-bold">{{ sla_urgente }}</h2></div></div>
@@ -496,12 +506,12 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-warning text-white fw-bold">🌍 Mapeamento e Upload das Bases</div>
         <div class="card-body">
@@ -528,10 +538,14 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                     <label class="form-label fw-bold">3. Base Geográfica (IBGE)</label>
                     <input type="file" name="f_ibge" class="form-control w-50 mx-auto" accept=".xlsx,.xls,.csv" required>
                 </div>
+                
                 <div id="progresso-container" class="mt-3 mb-3" style="display: none;">
                     <p id="progresso-texto" class="text-center fw-bold text-warning mb-2">A processar...</p>
-                    <div class="progress" style="height: 20px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div></div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div>
+                    </div>
                 </div>
+
                 <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="mostrarProgresso('A processar cruzamento regional... Pode demorar até 2 minutos.')">Processar e Gerar Relatório Excel</button>
             </form>
         </div>
@@ -542,6 +556,7 @@ function mostrarProgresso(texto) {
     document.getElementById('progresso-container').style.display = 'block';
     document.getElementById('progresso-texto').innerText = texto;
 }
+
 function lerCabecalho(input, selectId1, selectId2) {
     if (!input.files || input.files.length === 0) return;
     mostrarProgresso('A ler as colunas da planilha no servidor...');
@@ -560,13 +575,15 @@ function lerCabecalho(input, selectId1, selectId2) {
         s1.innerHTML = '<option value="">Falha na leitura</option>'; s2.innerHTML = '<option value="">Falha na leitura</option>'; 
     });
 }
-</script></body></html>"""
+</script>
+</body></html>"""
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Busca Individual (Sniper)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-danger text-white fw-bold">🎯 Parâmetros de Substituição</div>
         <div class="card-body">
@@ -590,13 +607,19 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Filtro de Tipo Prestador</label>
-                        <select name="filtro_tipo" id="filtro_tipo" class="form-select"><option value="">Todos (Sem filtro)</option></select>
+                        <select name="filtro_tipo" id="filtro_tipo" class="form-select">
+                            <option value="">Todos (Sem filtro)</option>
+                        </select>
                     </div>
                 </div>
+                
                 <div id="progresso-container" class="mt-3 mb-3" style="display: none;">
                     <p id="progresso-texto" class="text-center fw-bold text-danger mb-2">A processar...</p>
-                    <div class="progress" style="height: 20px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-danger w-100"></div></div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger w-100"></div>
+                    </div>
                 </div>
+
                 <button id="btn-submit" type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="mostrarProgresso('A gerar Relatório Sniper... Aguarde alguns segundos.')">🔍 Procurar Substitutos e Gerar Análise</button>
             </form>
         </div>
@@ -607,27 +630,48 @@ function mostrarProgresso(texto) {
     document.getElementById('progresso-container').style.display = 'block';
     document.getElementById('progresso-texto').innerText = texto;
 }
+
 function carregarInteligencia(input) {
     if (!input.files || input.files.length === 0) return;
     mostrarProgresso('A extrair inteligência da planilha (CNPJs e Tipos)...');
-    let inputAlvo = document.querySelector('input[name="alvo"]'); let selectTipo = document.getElementById('filtro_tipo'); let datalist = document.getElementById('lista_alvos');
-    inputAlvo.disabled = true; inputAlvo.placeholder = "A analisar a planilha no servidor... Aguarde..."; selectTipo.innerHTML = '<option value="">A carregar tipos...</option>';
+    
+    let inputAlvo = document.querySelector('input[name="alvo"]');
+    let selectTipo = document.getElementById('filtro_tipo');
+    let datalist = document.getElementById('lista_alvos');
+    
+    inputAlvo.disabled = true;
+    inputAlvo.placeholder = "A analisar a planilha no servidor... Aguarde...";
+    selectTipo.innerHTML = '<option value="">A carregar tipos...</option>';
+    
     let formData = new FormData(); formData.append("f_postal", input.files[0]);
+    
     fetch('/api/carregar_alvos', { method: 'POST', body: formData })
     .then(r => r.json())
     .then(data => {
         document.getElementById('progresso-container').style.display = 'none';
-        if(data.erro) { inputAlvo.placeholder = "Erro: " + data.erro; selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; return; }
-        datalist.innerHTML = ''; data.alvos.forEach(a => { let opt = document.createElement('option'); opt.value = a; datalist.appendChild(opt); });
+        if(data.erro) { 
+            inputAlvo.placeholder = "Erro: " + data.erro; 
+            selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; 
+            return; 
+        }
+        
+        datalist.innerHTML = '';
+        data.alvos.forEach(a => { let opt = document.createElement('option'); opt.value = a; datalist.appendChild(opt); });
+        
         selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option><option value="MESMO TIPO DO ALVO">Mesmo Tipo do Alvo</option>';
         data.tipos.forEach(t => { let opt = document.createElement('option'); opt.value = t; opt.text = t; selectTipo.appendChild(opt); });
-        inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ..."; inputAlvo.disabled = false;
+        
+        inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ...";
+        inputAlvo.disabled = false;
     }).catch(e => { 
         document.getElementById('progresso-container').style.display = 'none';
-        inputAlvo.placeholder = "Falha ao processar. Digite manualmente."; selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; inputAlvo.disabled = false; 
+        inputAlvo.placeholder = "Falha ao processar. Digite manualmente."; 
+        selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; 
+        inputAlvo.disabled = false; 
     });
 }
-</script></body></html>"""
+</script>
+</body></html>"""
 
 TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Resultados Pente Fino</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -1039,17 +1083,16 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
     total = t_rotina + t_avulsa
     
-    # Pendentes (Qualquer coisa não finalizada)
-    c.execute("SELECT COUNT(*) FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')"); p_rot = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')"); p_av = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demands WHERE status='Pendente'"); p_rot = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Pendente'"); p_av = c.fetchone()[0]
     pend = p_rot + p_av
     
     c.execute("SELECT COUNT(*) FROM demands WHERE status='Em Análise'"); a_rot = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Em Análise'"); a_av = c.fetchone()[0]
     em_ana = a_rot + a_av
     
-    c.execute("SELECT COUNT(*) FROM demands WHERE status='Finalizada'"); c_rot = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Concluído'"); c_av = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demands WHERE status IN ('Finalizada', 'Concluído', 'Cancelada')"); c_rot = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status IN ('Finalizada', 'Concluído', 'Cancelada')"); c_av = c.fetchone()[0]
     conc = c_rot + c_av
     
     c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
@@ -1058,6 +1101,7 @@ def dashboard_graficos():
     pendentes_avulsas = c.fetchall()
     
     todas_pendentes = pendentes_rotina + pendentes_avulsas
+    total_ativas = len(todas_pendentes)
     sla_atencao = 0; sla_urgente = 0; sla_critico = 0
     for p in todas_pendentes:
         s = calcular_sla(p[0], p[1])
@@ -1083,7 +1127,7 @@ def dashboard_graficos():
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
-    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=em_ana, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico)
+    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=em_ana, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico, total_ativas=total_ativas)
 
 @app.route('/pentefino')
 def hub_pentefino():
@@ -1103,11 +1147,9 @@ def pentefino_regional():
         df_operadora.columns = [str(c).strip().upper() for c in df_operadora.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_ibge_7 = cacador_de_colunas(df_ibge, ['CD_MUNICIPIO', 'COMPLETO', 'IBGE'])
-        col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
-        col_regiao_csv = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIÃO DE SAÚDE', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE', 'REGIÃO'])
-        col_mun_csv = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
-        col_uf_csv = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
+        col_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
+        col_regiao_csv = cacador_de_colunas(df_ibge, ['REGIÃO', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE'])
+        col_mun_csv = cacador_de_colunas(df_ibge, ['MUNICÍPIO', 'MUNICIPIO']); col_uf_csv = cacador_de_colunas(df_ibge, ['UF'])
 
         map_ibge_regiao = {}
         if col_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_7].apply(limpar_ibge), df_ibge[col_regiao_csv])))
@@ -1137,7 +1179,7 @@ def pentefino_regional():
         col_mun_pos = cacador_de_colunas(df_postal, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
         
         col_esp_pos = v_esp_pos if v_esp_pos in df_postal.columns else cacador_de_colunas(df_postal, ['ESPECIALIDADE', 'ESPECIALIDADES'])
-        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA', 'TIPO DE PRESTADOR'])
+        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO'])
         col_esp_op = v_esp_op if v_esp_op in df_operadora.columns else cacador_de_colunas(df_operadora, ['ESPECIALIDADE', 'ESPECIALIDADES'])
 
         if not col_cnpj_pos: df_postal['CNPJ_TEMP'] = "S/CNPJ"; col_cnpj_pos = 'CNPJ_TEMP'
@@ -1297,7 +1339,6 @@ def pentefino_individual():
             esp_cand_series = pd.Series([row.get(col_esp_ind, '')]) if col_esp_ind else pd.Series()
             esp_cand_set = extrair_especialidades(esp_cand_series)
             
-            # Adiciona ao Pool de acordo com a proximidade
             if ordem_prox == 0: 
                 piscina_mun.update(esp_cand_set)
                 piscina_reg.update(esp_cand_set)
@@ -1311,12 +1352,10 @@ def pentefino_individual():
             
         resultados.sort(key=lambda x: (x[0], x[1], x[4])) 
         
-        # Avaliação Pool Município
         faltante_mun = esp_alvo_set - piscina_mun
         if len(faltante_mun) == 0: status_mun = "100% Coberto pelo Município"; txt_faltante_mun = "A soma de todos os prestadores do município cobre as especialidades."
         else: status_mun = f"Vulnerabilidade no Município: Faltam {len(faltante_mun)}"; txt_faltante_mun = "\n".join([f"• {f}" for f in sorted(faltante_mun)])
         
-        # Avaliação Pool Região
         faltante_pool = esp_alvo_set - piscina_reg
         if len(faltante_pool) == 0: status_pool = "100% Coberto pela Rede da Região"; txt_faltante_pool = "A soma de todos os prestadores da região cobre as especialidades."
         else: status_pool = f"Vulnerabilidade na Região: Faltam {len(faltante_pool)}"; txt_faltante_pool = "\n".join([f"• {f}" for f in sorted(faltante_pool)])
