@@ -97,7 +97,7 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <div class="row">
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white fw-bold">💾 Gestão do Banco de Dados</div>
+                <div class="card-header bg-dark text-white fw-bold">💾 Gestão de Banco de Dados</div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-6 border-end">
@@ -272,7 +272,6 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
     </div>
   </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 function abrirModalAvulsa(btn) {
@@ -333,7 +332,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <tbody>{% for d in rotinas %}
             {% set sla_cocap = calc_sla(d[9], d[3]) %}
             {% set sla_geral = calc_sla(d[18], d[3]) %}
-            
             {% set row_class = '' %}
             {% if sla_cocap >= 6 %}{% set row_class = 'bg-critico' %}
             {% elif sla_cocap >= 4 %}{% set row_class = 'bg-urgente' %}
@@ -398,7 +396,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <div class="col-md-4"><label class="form-label fw-bold text-danger">Data Assin. FOP (SLA Geral)</label>
                 <input type="date" name="data_aprovacao" id="edit_rot_data_fop" class="form-control border-danger">
             </div>
-            
             <div class="col-md-4"><label class="form-label fw-bold">Tipo Negociação</label>
                 <select name="tipo_negociacao" id="edit_rot_tipo" class="form-select">
                     <option value="">Selecione...</option><option value="DIFERENCIADA">DIFERENCIADA</option><option value="MISTA">MISTA</option><option value="ESTADO">ESTADO</option><option value="NÃO IDENTIFICADA">NÃO IDENTIFICADA</option>
@@ -414,7 +411,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                     <option value="">Selecione...</option><option value="PARAMETRIZADO">PARAMETRIZADO</option><option value="AGUARDANDO RETORNO">AGUARDANDO RETORNO</option><option value="DEVOLVIDO">DEVOLVIDO</option><option value="NÃO LOCALIZADO">NÃO LOCALIZADO</option>
                 </select>
             </div>
-
             <div class="col-md-4"><label class="form-label fw-bold">FOP Autorização (Nº)</label>
                 <input type="text" name="fop_autorizacao" id="edit_rot_fop" class="form-control">
             </div>
@@ -424,7 +420,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <div class="col-md-4"><label class="form-label fw-bold">Impacto (R$)</label>
                 <input type="text" name="impacto_rs" id="edit_rot_rs" class="form-control" placeholder="Ex: 15000,00">
             </div>
-            
             <div class="col-md-12"><label class="form-label fw-bold">Observações</label>
                 <textarea name="observacao" id="edit_rot_obs" class="form-control" rows="3"></textarea>
             </div>
@@ -438,7 +433,6 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     </div>
   </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 function abrirModalRotina(btn) {
@@ -470,12 +464,12 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
 <div class="container mt-4">
     <div class="row text-center mb-2">
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-primary text-white p-3"><h5 class="mb-1">Total Demandas</h5><h2 class="fw-bold">{{ d_total }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes Gerais</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-info text-white p-3"><h5 class="mb-1">Em Análise</h5><h2 class="fw-bold">{{ d_ana }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
     </div>
     
-    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA COCAP (Pendentes)</h5>
+    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA COCAP (Baseado em {{ d_pend }} Pendências)</h5>
     <div class="row text-center mt-3 mb-4">
         <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h5 class="mb-1">Atenção (2 a 3 dias)</h5><h2 class="fw-bold">{{ sla_atencao }}</h2></div></div>
         <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h5 class="mb-1">Urgente (4 a 5 dias)</h5><h2 class="fw-bold">{{ sla_urgente }}</h2></div></div>
@@ -508,7 +502,6 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-warning text-white fw-bold">🌍 Mapeamento e Upload das Bases</div>
         <div class="card-body">
@@ -535,14 +528,10 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                     <label class="form-label fw-bold">3. Base Geográfica (IBGE)</label>
                     <input type="file" name="f_ibge" class="form-control w-50 mx-auto" accept=".xlsx,.xls,.csv" required>
                 </div>
-                
                 <div id="progresso-container" class="mt-3 mb-3" style="display: none;">
                     <p id="progresso-texto" class="text-center fw-bold text-warning mb-2">A processar...</p>
-                    <div class="progress" style="height: 20px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div>
-                    </div>
+                    <div class="progress" style="height: 20px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div></div>
                 </div>
-
                 <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="mostrarProgresso('A processar cruzamento regional... Pode demorar até 2 minutos.')">Processar e Gerar Relatório Excel</button>
             </form>
         </div>
@@ -553,7 +542,6 @@ function mostrarProgresso(texto) {
     document.getElementById('progresso-container').style.display = 'block';
     document.getElementById('progresso-texto').innerText = texto;
 }
-
 function lerCabecalho(input, selectId1, selectId2) {
     if (!input.files || input.files.length === 0) return;
     mostrarProgresso('A ler as colunas da planilha no servidor...');
@@ -572,15 +560,13 @@ function lerCabecalho(input, selectId1, selectId2) {
         s1.innerHTML = '<option value="">Falha na leitura</option>'; s2.innerHTML = '<option value="">Falha na leitura</option>'; 
     });
 }
-</script>
-</body></html>"""
+</script></body></html>"""
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Busca Individual (Sniper)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-danger text-white fw-bold">🎯 Parâmetros de Substituição</div>
         <div class="card-body">
@@ -604,19 +590,13 @@ TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Bu
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Filtro de Tipo Prestador</label>
-                        <select name="filtro_tipo" id="filtro_tipo" class="form-select">
-                            <option value="">Todos (Sem filtro)</option>
-                        </select>
+                        <select name="filtro_tipo" id="filtro_tipo" class="form-select"><option value="">Todos (Sem filtro)</option></select>
                     </div>
                 </div>
-                
                 <div id="progresso-container" class="mt-3 mb-3" style="display: none;">
                     <p id="progresso-texto" class="text-center fw-bold text-danger mb-2">A processar...</p>
-                    <div class="progress" style="height: 20px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger w-100"></div>
-                    </div>
+                    <div class="progress" style="height: 20px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-danger w-100"></div></div>
                 </div>
-
                 <button id="btn-submit" type="submit" class="btn btn-danger w-100 py-3 fw-bold fs-5 mt-3" onclick="mostrarProgresso('A gerar Relatório Sniper... Aguarde alguns segundos.')">🔍 Procurar Substitutos e Gerar Análise</button>
             </form>
         </div>
@@ -627,48 +607,27 @@ function mostrarProgresso(texto) {
     document.getElementById('progresso-container').style.display = 'block';
     document.getElementById('progresso-texto').innerText = texto;
 }
-
 function carregarInteligencia(input) {
     if (!input.files || input.files.length === 0) return;
     mostrarProgresso('A extrair inteligência da planilha (CNPJs e Tipos)...');
-    
-    let inputAlvo = document.querySelector('input[name="alvo"]');
-    let selectTipo = document.getElementById('filtro_tipo');
-    let datalist = document.getElementById('lista_alvos');
-    
-    inputAlvo.disabled = true;
-    inputAlvo.placeholder = "A analisar a planilha no servidor... Aguarde...";
-    selectTipo.innerHTML = '<option value="">A carregar tipos...</option>';
-    
+    let inputAlvo = document.querySelector('input[name="alvo"]'); let selectTipo = document.getElementById('filtro_tipo'); let datalist = document.getElementById('lista_alvos');
+    inputAlvo.disabled = true; inputAlvo.placeholder = "A analisar a planilha no servidor... Aguarde..."; selectTipo.innerHTML = '<option value="">A carregar tipos...</option>';
     let formData = new FormData(); formData.append("f_postal", input.files[0]);
-    
     fetch('/api/carregar_alvos', { method: 'POST', body: formData })
     .then(r => r.json())
     .then(data => {
         document.getElementById('progresso-container').style.display = 'none';
-        if(data.erro) { 
-            inputAlvo.placeholder = "Erro: " + data.erro; 
-            selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; 
-            return; 
-        }
-        
-        datalist.innerHTML = '';
-        data.alvos.forEach(a => { let opt = document.createElement('option'); opt.value = a; datalist.appendChild(opt); });
-        
+        if(data.erro) { inputAlvo.placeholder = "Erro: " + data.erro; selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; return; }
+        datalist.innerHTML = ''; data.alvos.forEach(a => { let opt = document.createElement('option'); opt.value = a; datalist.appendChild(opt); });
         selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option><option value="MESMO TIPO DO ALVO">Mesmo Tipo do Alvo</option>';
         data.tipos.forEach(t => { let opt = document.createElement('option'); opt.value = t; opt.text = t; selectTipo.appendChild(opt); });
-        
-        inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ...";
-        inputAlvo.disabled = false;
+        inputAlvo.placeholder = "Lista pronta! Digite Nome ou CNPJ..."; inputAlvo.disabled = false;
     }).catch(e => { 
         document.getElementById('progresso-container').style.display = 'none';
-        inputAlvo.placeholder = "Falha ao processar. Digite manualmente."; 
-        selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; 
-        inputAlvo.disabled = false; 
+        inputAlvo.placeholder = "Falha ao processar. Digite manualmente."; selectTipo.innerHTML = '<option value="">Todos (Sem filtro)</option>'; inputAlvo.disabled = false; 
     });
 }
-</script>
-</body></html>"""
+</script></body></html>"""
 
 TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Resultados Pente Fino</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -682,12 +641,21 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Baixar Planilha Completa (Excel)</a>
     </div>
     
+    <!-- Linha POOL DO MUNICÍPIO -->
+    <div class="alert alert-info shadow-sm border-info mt-3">
+        <h5 class="fw-bold text-dark mb-1">📍 Avaliação do Pool do Município ({{ mun_alvo }}/{{ uf_alvo }})</h5>
+        <p class="mb-0 text-dark"><strong>Status:</strong> {{ pool_mun_status }}</p>
+        {% if pool_mun_faltantes and pool_mun_faltantes != 'A soma de todos os prestadores do município cobre as especialidades.' %}
+        <hr><p class="mb-0 text-danger fw-bold small" style="white-space: pre-wrap;">{{ pool_mun_faltantes }}</p>
+        {% endif %}
+    </div>
+
     <!-- Linha POOL DA REGIÃO -->
     <div class="alert alert-warning shadow-sm border-warning mt-3">
-        <h5 class="fw-bold text-dark mb-1">⭐ Avaliação do Pool da Região ({{ regiao_alvo }})</h5>
-        <p class="mb-0 text-dark"><strong>Status:</strong> {{ pool_status }}</p>
-        {% if pool_faltantes != 'A soma de todos os prestadores da região cobre as especialidades.' %}
-        <hr><p class="mb-0 text-danger fw-bold small" style="white-space: pre-wrap;">{{ pool_faltantes }}</p>
+        <h5 class="fw-bold text-dark mb-1">⭐ Avaliação do Pool da Região de Saúde ({{ regiao_alvo }})</h5>
+        <p class="mb-0 text-dark"><strong>Status:</strong> {{ pool_reg_status }}</p>
+        {% if pool_reg_faltantes and pool_reg_faltantes != 'A soma de todos os prestadores da região cobre as especialidades.' %}
+        <hr><p class="mb-0 text-danger fw-bold small" style="white-space: pre-wrap;">{{ pool_reg_faltantes }}</p>
         {% endif %}
     </div>
 
@@ -806,7 +774,7 @@ def api_carregar_alvos():
         
         col_cnpj = cacador_de_colunas(df, ['CNPJ', 'CPFCNPJ'])
         col_nome = cacador_de_colunas(df, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
-        col_tipo = cacador_de_colunas(df, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA'])
+        col_tipo = cacador_de_colunas(df, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA', 'TIPO DE PRESTADOR'])
         
         if not col_cnpj or not col_nome: return jsonify({"erro": "Colunas de Nome ou CNPJ não encontradas"})
         
@@ -820,7 +788,7 @@ def api_carregar_alvos():
             if cnpj and cnpj != 'NAN' and nome: alvos.append(f"{cnpj} - {nome}")
             if col_tipo:
                 tipo = str(row[col_tipo]).strip().upper()
-                if tipo and tipo != 'NAN' and tipo != 'NONE': tipos_set.add(tipo)
+                if tipo and tipo != 'NAN' and tipo != 'NONE' and tipo != '': tipos_set.add(tipo)
                 
         return jsonify({"alvos": alvos, "tipos": sorted(list(tipos_set))})
     except Exception as e: return jsonify({"erro": str(e)}), 500
@@ -1071,6 +1039,7 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
     total = t_rotina + t_avulsa
     
+    # Pendentes (Qualquer coisa não finalizada)
     c.execute("SELECT COUNT(*) FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')"); p_rot = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')"); p_av = c.fetchone()[0]
     pend = p_rot + p_av
@@ -1134,9 +1103,11 @@ def pentefino_regional():
         df_operadora.columns = [str(c).strip().upper() for c in df_operadora.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
-        col_regiao_csv = cacador_de_colunas(df_ibge, ['REGIÃO', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE'])
-        col_mun_csv = cacador_de_colunas(df_ibge, ['MUNICÍPIO', 'MUNICIPIO']); col_uf_csv = cacador_de_colunas(df_ibge, ['UF'])
+        col_ibge_7 = cacador_de_colunas(df_ibge, ['CD_MUNICIPIO', 'COMPLETO', 'IBGE'])
+        col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
+        col_regiao_csv = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIÃO DE SAÚDE', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE', 'REGIÃO'])
+        col_mun_csv = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        col_uf_csv = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
 
         map_ibge_regiao = {}
         if col_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_7].apply(limpar_ibge), df_ibge[col_regiao_csv])))
@@ -1166,7 +1137,7 @@ def pentefino_regional():
         col_mun_pos = cacador_de_colunas(df_postal, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
         
         col_esp_pos = v_esp_pos if v_esp_pos in df_postal.columns else cacador_de_colunas(df_postal, ['ESPECIALIDADE', 'ESPECIALIDADES'])
-        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO'])
+        col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA', 'TIPO DE PRESTADOR'])
         col_esp_op = v_esp_op if v_esp_op in df_operadora.columns else cacador_de_colunas(df_operadora, ['ESPECIALIDADE', 'ESPECIALIDADES'])
 
         if not col_cnpj_pos: df_postal['CNPJ_TEMP'] = "S/CNPJ"; col_cnpj_pos = 'CNPJ_TEMP'
@@ -1248,7 +1219,7 @@ def pentefino_individual():
         col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
         col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
         col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
-        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA'])
+        col_tipo_ind = cacador_de_colunas(df_ind, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA', 'TIPO DE PRESTADOR'])
         col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
         col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CÓDIGO IBGE'])
         
@@ -1273,9 +1244,11 @@ def pentefino_individual():
         group_cols = [c for c in [col_cnpj_ind, col_nome_ind, col_mun_ind, col_uf_ind, col_ibge_ind] if c]
         df_ind = df_ind.groupby(group_cols, dropna=False).agg(dict_agg).reset_index()
 
-        c_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); c_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
-        c_regiao = cacador_de_colunas(df_ibge, ['REGIÃO', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE'])
-        c_mun = cacador_de_colunas(df_ibge, ['MUNICÍPIO', 'MUNICIPIO']); c_uf = cacador_de_colunas(df_ibge, ['UF'])
+        c_ibge_7 = cacador_de_colunas(df_ibge, ['CD_MUNICIPIO', 'COMPLETO', 'IBGE'])
+        c_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
+        c_regiao = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIÃO DE SAÚDE', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE', 'REGIÃO'])
+        c_mun = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        c_uf = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
 
         map_ibge_regiao = {}
         if c_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_7].apply(limpar_ibge), df_ibge[c_regiao])))
@@ -1298,7 +1271,8 @@ def pentefino_individual():
         esp_alvo_series = pd.Series([row_alvo.get(col_esp_ind, '')]) if col_esp_ind else pd.Series()
         esp_alvo_set = extrair_especialidades(esp_alvo_series)
         
-        resultados = []; piscina_regiao = set() 
+        resultados = []; piscina_mun = set(); piscina_reg = set()
+        
         for _, row in df_ind.iterrows():
             cnpj_cand = str(row.get(col_cnpj_ind, '')).strip()
             if cnpj_cand == cnpj_alvo or cnpj_cand == 'NAN' or not cnpj_cand: continue
@@ -1313,16 +1287,22 @@ def pentefino_individual():
             
             prox_str = ""; ordem_prox = 2
             if mun_cand == mun_alvo and uf_cand == uf_alvo: prox_str = "1 - Mesmo Município"; ordem_prox = 0
-            elif regiao_cand == regiao_alvo and regiao_alvo != "NÃO ENCONTRADA": prox_str = "2 - Mesma Região de Saúde"; ordem_prox = 1
+            elif regiao_cand == regiao_alvo and regiao_alvo and regiao_alvo != "NÃO ENCONTRADA": prox_str = "2 - Mesma Região de Saúde"; ordem_prox = 1
             else: continue
             
             tipo_cand = str(row.get(col_tipo_ind, '')).strip().upper() if col_tipo_ind else "-"
-            
             if filtro_tipo == "MESMO TIPO DO ALVO" and tipo_cand != tipo_alvo: continue
             elif filtro_tipo and filtro_tipo != "MESMO TIPO DO ALVO" and tipo_cand != filtro_tipo: continue
                 
             esp_cand_series = pd.Series([row.get(col_esp_ind, '')]) if col_esp_ind else pd.Series()
-            esp_cand_set = extrair_especialidades(esp_cand_series); piscina_regiao.update(esp_cand_set)
+            esp_cand_set = extrair_especialidades(esp_cand_series)
+            
+            # Adiciona ao Pool de acordo com a proximidade
+            if ordem_prox == 0: 
+                piscina_mun.update(esp_cand_set)
+                piscina_reg.update(esp_cand_set)
+            elif ordem_prox == 1:
+                piscina_reg.update(esp_cand_set)
             
             faltante = esp_alvo_set - esp_cand_set; nome_cand = str(row.get(col_nome_ind, '')).strip()
             if len(faltante) == 0: status_cob = "100% Coberto (Sem Vuln)"; txt_faltante = "Nenhuma"
@@ -1330,11 +1310,19 @@ def pentefino_individual():
             resultados.append((ordem_prox, len(faltante), prox_str, cnpj_cand, nome_cand, tipo_cand, f"{mun_cand}/{uf_cand}", status_cob, txt_faltante))
             
         resultados.sort(key=lambda x: (x[0], x[1], x[4])) 
-        faltante_pool = esp_alvo_set - piscina_regiao
-        if len(faltante_pool) == 0: status_pool = "100% Coberto pela Rede"; txt_faltante_pool = "A soma de todos os prestadores da região cobre as especialidades."
-        else: status_pool = f"Vulnerabilidade na Rede: Faltam {len(faltante_pool)}"; txt_faltante_pool = "\n".join([f"• {f}" for f in sorted(faltante_pool)])
+        
+        # Avaliação Pool Município
+        faltante_mun = esp_alvo_set - piscina_mun
+        if len(faltante_mun) == 0: status_mun = "100% Coberto pelo Município"; txt_faltante_mun = "A soma de todos os prestadores do município cobre as especialidades."
+        else: status_mun = f"Vulnerabilidade no Município: Faltam {len(faltante_mun)}"; txt_faltante_mun = "\n".join([f"• {f}" for f in sorted(faltante_mun)])
+        
+        # Avaliação Pool Região
+        faltante_pool = esp_alvo_set - piscina_reg
+        if len(faltante_pool) == 0: status_pool = "100% Coberto pela Rede da Região"; txt_faltante_pool = "A soma de todos os prestadores da região cobre as especialidades."
+        else: status_pool = f"Vulnerabilidade na Região: Faltam {len(faltante_pool)}"; txt_faltante_pool = "\n".join([f"• {f}" for f in sorted(faltante_pool)])
             
-        pool_row = ("☆ POOL DA REGIÃO ☆", "MÚLTIPLOS", "SOMA DOS PRESTADORES VÁLIDOS DA REGIÃO", filtro_tipo, regiao_alvo, status_pool, txt_faltante_pool)
+        pool_mun_row = ("☆ POOL DO MUNICÍPIO ☆", "MÚLTIPLOS", "SOMA DOS PRESTADORES DO MUNICÍPIO", filtro_tipo, f"{mun_alvo}/{uf_alvo}", status_mun, txt_faltante_mun)
+        pool_reg_row = ("☆ POOL DA REGIÃO ☆", "MÚLTIPLOS", "SOMA DOS PRESTADORES DA REGIÃO DE SAÚDE", filtro_tipo, regiao_alvo, status_pool, txt_faltante_pool)
 
         output = BytesIO()
         wb = Workbook(); ws = wb.active; ws.title = "Substituicao Individual"
@@ -1353,10 +1341,13 @@ def pentefino_individual():
         for col_idx, texto in enumerate(headers, 1):
             cell = ws.cell(row=2, column=col_idx, value=texto); cell.fill = fill_cols; cell.font = Font(color="000000", bold=True); cell.alignment = align_c; cell.border = thin_border
             
-        for i, val in enumerate(pool_row, 1):
+        for i, val in enumerate(pool_mun_row, 1):
             cp = ws.cell(row=3, column=i, value=val); cp.fill = fill_pool; cp.font = Font(color="000000", bold=True); cp.alignment = align_l; cp.border = thin_border
+            
+        for i, val in enumerate(pool_reg_row, 1):
+            cp = ws.cell(row=4, column=i, value=val); cp.fill = fill_pool; cp.font = Font(color="000000", bold=True); cp.alignment = align_l; cp.border = thin_border
 
-        linha = 4
+        linha = 5
         for r in resultados:
             c1 = ws.cell(row=linha, column=1, value=r[2]); c2 = ws.cell(row=linha, column=2, value=r[3])
             c3 = ws.cell(row=linha, column=3, value=r[4]); c4 = ws.cell(row=linha, column=4, value=r[5])
@@ -1372,10 +1363,14 @@ def pentefino_individual():
 
         wb.save(output); output.seek(0)
         resultados_100 = [r for r in resultados if r[1] == 0]
-        resultados_vul = [r for r in resultados if r[1] > 0] # Adicionado para a tela!
+        resultados_vul = [r for r in resultados if r[1] > 0]
         b64_data = base64.b64encode(output.getvalue()).decode('utf-8')
         
-        return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, resultados_100=resultados_100, resultados_vul=resultados_vul, regiao_alvo=regiao_alvo, pool_status=status_pool, pool_faltantes=txt_faltante_pool)
+        return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, 
+                                      resultados_100=resultados_100, resultados_vul=resultados_vul, 
+                                      regiao_alvo=regiao_alvo, mun_alvo=mun_alvo, uf_alvo=uf_alvo,
+                                      pool_mun_status=status_mun, pool_mun_faltantes=txt_faltante_mun,
+                                      pool_reg_status=status_pool, pool_reg_faltantes=txt_faltante_pool)
     except Exception as e: flash(f"Erro ao processar as planilhas: {e}", "danger"); return redirect(url_for('pentefino_individual'))
 
 if __name__ == '__main__':
