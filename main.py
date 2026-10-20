@@ -33,7 +33,6 @@ def calcular_sla(data_str, status):
         ds = str(data_str).strip()
         if not ds or ds.upper() in ['NONE', 'NAN', '']: return -1
         
-        # Aceita formato de formulário Web (YYYY-MM-DD) ou Sistema (DD/MM/YYYY HH:MM)
         if '-' in ds:
             dt = datetime.strptime(ds, "%Y-%m-%d")
         elif len(ds) > 10:
@@ -107,7 +106,7 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <div class="row">
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white fw-bold">💾 Gestão do Banco de Dados</div>
+                <div class="card-header bg-dark text-white fw-bold">💾 Gestão de Banco de Dados</div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-6 border-end">
@@ -506,12 +505,13 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+# TELA REGIONAL COM SHEETJS VOLTANDO! 
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-    
     <div class="card shadow-sm border-0">
         <div class="card-header bg-warning text-white fw-bold">🌍 Mapeamento e Upload das Bases</div>
         <div class="card-body">
@@ -577,6 +577,7 @@ function lerCabecalho(input, selectId1, selectId2) {
 }
 </script>
 </body></html>"""
+
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -703,21 +704,23 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         {% endif %}
     </div>
 
-    <!-- Tabela 1: 100% de Cobertura -->
-    <div class="card shadow-sm border-0 mt-4">
-        <div class="card-header bg-primary text-white fw-bold fs-5">🏆 Prestadores Internos com 100% de Cobertura (Zero Vulnerabilidades)</div>
+    <h4 class="fw-bold text-secondary mt-5 mb-3 border-bottom pb-2">1. Análise Municipal (1ª Etapa)</h4>
+    
+    <!-- Tabela 1: 100% Município -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-primary text-white fw-bold fs-5">🏆 100% de Cobertura no MUNICÍPIO</div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 text-center">
                     <thead class="table-light"><tr><th>Proximidade</th><th>CNPJ</th><th class="text-start">Prestador</th><th>Município/UF</th><th>Tipo</th></tr></thead>
                     <tbody>
-                        {% for r in resultados_100 %}
+                        {% for r in res_100_mun %}
                         <tr>
                             <td><span class="badge bg-info text-dark">{{ r[2] }}</span></td>
                             <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td><td>{{ r[5] }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center text-muted py-4 fs-5">Nenhum prestador interno com 100% de cobertura encontrado.</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum prestador 100% equivalente no município.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -725,22 +728,69 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         </div>
     </div>
     
-    <!-- Tabela 2: Vulneráveis -->
-    <div class="card shadow-sm border-0 mt-4">
-        <div class="card-header bg-danger text-white fw-bold fs-5">⚠️ Prestadores com Cobertura Parcial (Vulneráveis)</div>
+    <!-- Tabela 2: Vulneráveis Município -->
+    <div class="card shadow-sm border-0 mb-5">
+        <div class="card-header bg-danger text-white fw-bold fs-5">⚠️ Cobertura Parcial no MUNICÍPIO (Vulneráveis)</div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 text-center" style="font-size: 0.9em;">
                     <thead class="table-light"><tr><th>Proximidade</th><th>CNPJ</th><th class="text-start">Prestador</th><th>Município/UF</th><th class="text-start">Especialidades Faltantes</th></tr></thead>
                     <tbody>
-                        {% for r in resultados_vul %}
+                        {% for r in res_vul_mun %}
                         <tr>
                             <td><span class="badge bg-secondary">{{ r[2] }}</span></td>
                             <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td>
                             <td class="text-start text-danger small" style="white-space: pre-wrap;">{{ r[8] }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center text-muted py-4 fs-5">Todos os prestadores encontrados possuem 100% de cobertura!</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum prestador vulnerável no município.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <h4 class="fw-bold text-secondary mt-5 mb-3 border-bottom pb-2">2. Análise Regional (2ª Etapa - Demais Municípios da Região)</h4>
+
+    <!-- Tabela 3: 100% Região -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header text-white fw-bold fs-5" style="background-color: #0dcaf0;">🌟 100% de Cobertura na REGIÃO DE SAÚDE</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center">
+                    <thead class="table-light"><tr><th>Proximidade</th><th>CNPJ</th><th class="text-start">Prestador</th><th>Município/UF</th><th>Tipo</th></tr></thead>
+                    <tbody>
+                        {% for r in res_100_reg %}
+                        <tr>
+                            <td><span class="badge bg-info text-dark">{{ r[2] }}</span></td>
+                            <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td><td>{{ r[5] }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum prestador 100% equivalente na região de saúde.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tabela 4: Vulneráveis Região -->
+    <div class="card shadow-sm border-0 mb-5">
+        <div class="card-header text-white fw-bold fs-5" style="background-color: #fd7e14;">⚡ Cobertura Parcial na REGIÃO DE SAÚDE (Vulneráveis)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center" style="font-size: 0.9em;">
+                    <thead class="table-light"><tr><th>Proximidade</th><th>CNPJ</th><th class="text-start">Prestador</th><th>Município/UF</th><th class="text-start">Especialidades Faltantes</th></tr></thead>
+                    <tbody>
+                        {% for r in res_vul_reg %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ r[2] }}</span></td>
+                            <td>{{ r[3] }}</td><td class="fw-bold text-start">{{ r[4] }}</td><td>{{ r[6] }}</td>
+                            <td class="text-start text-danger small" style="white-space: pre-wrap;">{{ r[8] }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum prestador regional vulnerável encontrado.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -1083,18 +1133,22 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
     total = t_rotina + t_avulsa
     
-    c.execute("SELECT COUNT(*) FROM demands WHERE status='Pendente'"); p_rot = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Pendente'"); p_av = c.fetchone()[0]
-    pend = p_rot + p_av
+    # Pendentes puros (Demandas novas)
+    c.execute("SELECT COUNT(*) FROM demands WHERE status='Pendente'"); p_rot_pure = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Pendente'"); p_av_pure = c.fetchone()[0]
+    pend_puro = p_rot_pure + p_av_pure
     
+    # Em Análise
     c.execute("SELECT COUNT(*) FROM demands WHERE status='Em Análise'"); a_rot = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Em Análise'"); a_av = c.fetchone()[0]
     em_ana = a_rot + a_av
     
+    # Concluídas
     c.execute("SELECT COUNT(*) FROM demands WHERE status IN ('Finalizada', 'Concluído', 'Cancelada')"); c_rot = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status IN ('Finalizada', 'Concluído', 'Cancelada')"); c_av = c.fetchone()[0]
     conc = c_rot + c_av
     
+    # Ativas para o cálculo de SLA (Tudo o que não está fechado)
     c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
     pendentes_rotina = c.fetchall()
     c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
@@ -1127,7 +1181,7 @@ def dashboard_graficos():
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
-    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend, d_ana=em_ana, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico, total_ativas=total_ativas)
+    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend_puro, d_ana=em_ana, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico, total_ativas=total_ativas)
 
 @app.route('/pentefino')
 def hub_pentefino():
@@ -1147,15 +1201,17 @@ def pentefino_regional():
         df_operadora.columns = [str(c).strip().upper() for c in df_operadora.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_ibge_7 = cacador_de_colunas(df_ibge, ['COMPLETO']); col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
-        col_regiao_csv = cacador_de_colunas(df_ibge, ['REGIÃO', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE'])
-        col_mun_csv = cacador_de_colunas(df_ibge, ['MUNICÍPIO', 'MUNICIPIO']); col_uf_csv = cacador_de_colunas(df_ibge, ['UF'])
+        col_ibge_7 = cacador_de_colunas(df_ibge, ['CD_MUNICIPIO', 'COMPLETO', 'IBGE'])
+        col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
+        c_regiao = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIÃO DE SAÚDE', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE', 'REGIÃO'])
+        col_mun_csv = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        col_uf_csv = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
 
         map_ibge_regiao = {}
-        if col_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_7].apply(limpar_ibge), df_ibge[col_regiao_csv])))
-        if col_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_6].apply(limpar_ibge), df_ibge[col_regiao_csv])))
+        if col_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_7].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
+        if col_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_6].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
         df_ibge['CHAVE_GEO'] = df_ibge[col_mun_csv].apply(normalizar_texto) + "_" + df_ibge[col_uf_csv].apply(normalizar_texto)
-        map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[col_regiao_csv]))
+        map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else "")))
 
         dics_processados = []
         for df in [df_postal, df_operadora]:
@@ -1293,10 +1349,10 @@ def pentefino_individual():
         c_uf = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
 
         map_ibge_regiao = {}
-        if c_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_7].apply(limpar_ibge), df_ibge[c_regiao])))
-        if c_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_6].apply(limpar_ibge), df_ibge[c_regiao])))
+        if c_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_7].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
+        if c_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_6].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
         df_ibge['CHAVE_GEO'] = df_ibge[c_mun].apply(normalizar_texto) + "_" + df_ibge[c_uf].apply(normalizar_texto)
-        map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao]))
+        map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else "")))
 
         linhas_alvo_agrupadas = df_ind[df_ind[col_cnpj_ind] == cnpj_alvo]
         if not linhas_alvo_agrupadas.empty: row_alvo = linhas_alvo_agrupadas.iloc[0]
@@ -1307,7 +1363,7 @@ def pentefino_individual():
         
         ibge_alvo = str(row_alvo.get(col_ibge_ind, '')) if col_ibge_ind else None
         regiao_alvo = None
-        if ibge_alvo and ibge_alvo != 'NAN': regiao_alvo = map_ibge_regiao.get(limpar_ibge(ibge_alvo))
+        if ibge_alvo and str(ibge_alvo).upper() not in ['NAN', 'NONE', 'NULL', '']: regiao_alvo = map_ibge_regiao.get(limpar_ibge(ibge_alvo))
         if not regiao_alvo: regiao_alvo = map_geo_regiao.get(chave_geo_alvo, "NÃO ENCONTRADA")
         
         esp_alvo_series = pd.Series([row_alvo.get(col_esp_ind, '')]) if col_esp_ind else pd.Series()
@@ -1324,7 +1380,7 @@ def pentefino_individual():
             
             ibge_cand = str(row.get(col_ibge_ind, '')) if col_ibge_ind else None
             regiao_cand = None
-            if ibge_cand and ibge_cand != 'NAN': regiao_cand = map_ibge_regiao.get(limpar_ibge(ibge_cand))
+            if ibge_cand and str(ibge_cand).upper() not in ['NAN', 'NONE', 'NULL', '']: regiao_cand = map_ibge_regiao.get(limpar_ibge(ibge_cand))
             if not regiao_cand: regiao_cand = map_geo_regiao.get(chave_geo_cand, "NÃO ENCONTRADA")
             
             prox_str = ""; ordem_prox = 2
@@ -1350,6 +1406,7 @@ def pentefino_individual():
             else: status_cob = f"Vulnerabilidade: Faltam {len(faltante)}"; txt_faltante = "\n".join([f"• {f}" for f in sorted(faltante)])
             resultados.append((ordem_prox, len(faltante), prox_str, cnpj_cand, nome_cand, tipo_cand, f"{mun_cand}/{uf_cand}", status_cob, txt_faltante))
             
+        # Ordena a lista para o Excel e HTML: Primeiro os do Município, depois os da Região, e dentro disso os mais completos
         resultados.sort(key=lambda x: (x[0], x[1], x[4])) 
         
         faltante_mun = esp_alvo_set - piscina_mun
@@ -1401,12 +1458,18 @@ def pentefino_individual():
         ws.column_dimensions['E'].width = 20; ws.column_dimensions['F'].width = 25; ws.column_dimensions['G'].width = 65
 
         wb.save(output); output.seek(0)
-        resultados_100 = [r for r in resultados if r[1] == 0]
-        resultados_vul = [r for r in resultados if r[1] > 0]
+        
+        # Filtra e separa os dados para o HTML Renderizar as 4 Tabelas Exatas
+        res_100_mun = [r for r in resultados if r[1] == 0 and r[0] == 0]
+        res_100_reg = [r for r in resultados if r[1] == 0 and r[0] == 1]
+        res_vul_mun = [r for r in resultados if r[1] > 0 and r[0] == 0]
+        res_vul_reg = [r for r in resultados if r[1] > 0 and r[0] == 1]
+        
         b64_data = base64.b64encode(output.getvalue()).decode('utf-8')
         
         return render_template_string(TELA_PENTEFINO_INDIVIDUAL_RESULTADO, alvo_nome=nome_alvo_real, alvo_cnpj=cnpj_alvo, excel_b64=b64_data, 
-                                      resultados_100=resultados_100, resultados_vul=resultados_vul, 
+                                      res_100_mun=res_100_mun, res_100_reg=res_100_reg,
+                                      res_vul_mun=res_vul_mun, res_vul_reg=res_vul_reg, 
                                       regiao_alvo=regiao_alvo, mun_alvo=mun_alvo, uf_alvo=uf_alvo,
                                       pool_mun_status=status_mun, pool_mun_faltantes=txt_faltante_mun,
                                       pool_reg_status=status_pool, pool_reg_faltantes=txt_faltante_pool)
