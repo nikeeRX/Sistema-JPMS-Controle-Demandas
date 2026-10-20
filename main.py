@@ -24,14 +24,60 @@ def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
 # ==========================================
-# AUTO-REPARADOR DE SEQUÊNCIAS (POSTGRESQL)
+# INICIALIZAÇÃO E AUTO-REPARAÇÃO DO BANCO
 # ==========================================
+def inicializar_tabela_credenciamento():
+    try:
+        conn = conectar_db()
+        if not conn: return
+        c = conn.cursor()
+        is_postgres = "psycopg2" in str(type(conn))
+        id_col = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        c.execute(f"""
+            CREATE TABLE IF NOT EXISTS credenciamento_fases (
+                id {id_col},
+                filial TEXT,
+                cnpj_cpf TEXT,
+                nome TEXT,
+                fantasia TEXT,
+                tipo_prestador TEXT,
+                categoria TEXT,
+                tipo_processo TEXT,
+                processo TEXT,
+                data_abertura TEXT,
+                data_final_proc TEXT,
+                usuario_resp TEXT,
+                fase TEXT,
+                ultima_fase TEXT,
+                data_inicial TEXT,
+                data_final TEXT,
+                proxima_fase TEXT,
+                dias_percorridos TEXT,
+                dias_percorridos_pf TEXT,
+                justificativa_indef TEXT,
+                parecer TEXT,
+                observacao TEXT,
+                origem_parecer TEXT,
+                data_aprovacao TEXT,
+                data_rejeicao TEXT,
+                usuario_aprj TEXT,
+                justificativa_corgen TEXT,
+                usuario_notificacao TEXT,
+                grupo_prestadores TEXT,
+                data_atualizacao TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Aviso ao criar tabela credenciamento_fases: {e}")
+
 def sincronizar_sequencias():
     try:
         conn = conectar_db()
         if conn and "psycopg2" in str(type(conn)):
             c = conn.cursor()
-            for tabela in ['demands', 'demandas_avulsas', 'users']:
+            for tabela in ['demands', 'demandas_avulsas', 'users', 'credenciamento_fases']:
                 try:
                     c.execute(f"SELECT setval(pg_get_serial_sequence('{tabela}', 'id'), COALESCE((SELECT MAX(id) FROM {tabela}), 0) + 1, false);")
                     conn.commit()
@@ -41,29 +87,135 @@ def sincronizar_sequencias():
     except Exception as e:
         print(f"Aviso ao sincronizar sequências: {e}")
 
+inicializar_tabela_credenciamento()
 sincronizar_sequencias()
 
 # ==========================================
-# MOTOR DE CÁLCULO DE SLA
+# MOTORES DE CÁLCULO DE SLA (COM TRAVA DE PARADA)
 # ==========================================
-def calcular_sla(data_str, status):
-    if not data_str or status in ['Concluído', 'Finalizada', 'Cancelada']:
-        return -1 
+STATUS_ENCERRADOS_DEMANDAS = {
+    'CONCLUÍDO', 'CONCLUIDO', 'FINALIZADA', 'FINALIZADO',
+    'DEVOLVIDO', 'DEVOLVIDA', 'CANCELADA', 'CANCELADO'
+}
+
+def parse_data_br(data_str):
+    if not data_str: return None
+    ds = str(data_str).strip()
+    if not ds or ds.upper() in ['NONE', 'NAN', '']: return None
     try:
-        ds = str(data_str).strip()
-        if not ds or ds.upper() in ['NONE', 'NAN', '']: return -1
-        
-        if '-' in ds:
-            dt = datetime.strptime(ds.split(' ')[0], "%Y-%m-%d")
-        elif len(ds) > 10:
-            dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
+        part = ds.split(' ')[0]
+        if '-' in part:
+            return datetime.strptime(part, "%Y-%m-%d")
+        return datetime.strptime(part, "%d/%m/%Y")
+    except Exception:
+        return None
+
+def calcular_sla(data_str, status, data_fim=None):
+    """
+    Retorna os dias em aberto APENAS para demandas ativas.
+    Se o status for Finalizada, Concluído, Devolvido ou Cancelada, retorna -1 (para a contagem de alerta).
+    """
+    st_upper = str(status or '').strip().upper()
+    if not data_str or st_upper in STATUS_ENCERRADOS_DEMANDAS:
+        return -1 
+    dt = parse_data_br(data_str)
+    if not dt: return -1
+    dias = (datetime.now() - dt).days
+    return dias if dias >= 0 else 0
+
+def calcular_dias_fechados(data_ini_str, data_fim_str):
+    """
+    Calcula quantos dias a demanda levou até ser Finalizada ou Devolvida (SLA congelado).
+    """
+    dt_ini = parse_data_br(data_ini_str)
+    dt_fim = parse_data_br(data_fim_str)
+    if dt_ini and dt_fim:
+        d = (dt_fim - dt_ini).days
+        return d if d >= 0 else 0
+    return None
+
+def calcular_sla_credenciamento(row):
+    """
+    Calcula o SLA da Fase (DATAINICIAL) e o SLA Geral (DATADATAABERTURAPROCESSO).
+    Congela imediatamente a contagem se o PARECER for DEVOLVIDO, DEFERIDO, INDEFERIDO ou se tiver DATAFINAL.
+    """
+    fase = str(row[12] or '').strip().upper()
+    parecer = str(row[20] or '').strip().upper()
+    data_abertura = row[9]
+    data_final_proc = str(row[10] or '').strip()
+    data_inicial_fase = row[14]
+    data_final_fase = str(row[15] or '').strip()
+
+    # Para o relógio se foi DEVOLVIDO, INDEFERIDO, DEFERIDO ou se já tem data final registrada
+    parado = False
+    if parecer in ['DEVOLVIDO', 'INDEFERIDO', 'DEFERIDO', 'FINALIZADO', 'CONCLUÍDO', 'CANCELADO']:
+        parado = True
+    elif data_final_proc != '' or data_final_fase != '':
+        parado = True
+
+    dt_ini = parse_data_br(data_inicial_fase) or parse_data_br(data_abertura)
+    dt_abert = parse_data_br(data_abertura)
+    dt_fim = parse_data_br(data_final_fase) or parse_data_br(data_final_proc)
+
+    hoje = datetime.now()
+    if not parado:
+        dias_fase = max(0, (hoje - dt_ini).days) if dt_ini else 0
+        dias_geral = max(0, (hoje - dt_abert).days) if dt_abert else dias_fase
+    else:
+        # Usa os dias congelados do próprio relatório ou calcula entre início e fim
+        if row[17] and str(row[17]).strip().isdigit():
+            dias_fase = int(str(row[17]).strip())
+        elif dt_ini and dt_fim:
+            dias_fase = max(0, (dt_fim - dt_ini).days)
         else:
-            dt = datetime.strptime(ds, "%d/%m/%Y")
-            
-        dias = (datetime.now() - dt).days
-        return dias if dias >= 0 else 0
-    except:
-        return -1
+            dias_fase = 0
+
+        if row[18] and str(row[18]).strip().isdigit():
+            dias_geral = int(str(row[18]).strip())
+        elif dt_abert and dt_fim:
+            dias_geral = max(0, (dt_fim - dt_abert).days)
+        else:
+            dias_geral = dias_fase
+
+    cor_linha = ""
+    faixa_sla = "Parado"
+    if not parado:
+        if dias_fase >= 6:
+            cor_linha = "bg-critico"
+            faixa_sla = "Crítico"
+        elif dias_fase >= 4:
+            cor_linha = "bg-urgente"
+            faixa_sla = "Urgente"
+        elif dias_fase >= 2:
+            cor_linha = "bg-atencao"
+            faixa_sla = "Atenção"
+        else:
+            faixa_sla = "No Prazo"
+
+    return {
+        "ativo": not parado,
+        "dias_fase": dias_fase,
+        "dias_geral": dias_geral,
+        "cor_linha": cor_linha,
+        "faixa_sla": faixa_sla,
+        "estourou_90d": (not parado and dias_geral >= 90)
+    }
+
+def corrigir_encoding_postal(texto):
+    if pd.isna(texto) or texto is None:
+        return ""
+    s = str(texto).strip()
+    substituicoes = {
+        'Ă': 'Ã', 'ă': 'ã',
+        'ő': 'õ', 'Ő': 'Õ',
+        'ę': 'ê', 'Ę': 'Ê',
+        'ŕ': 'à', 'Ŕ': 'À',
+        'ş': 'º', 'Ş': 'ª',
+        'ć': 'ç', 'Ć': 'Ç'
+    }
+    for k, v in substituicoes.items():
+        s = s.replace(k, v)
+    return s
 
 # ==========================================
 # LISTAS GLOBAIS E CONSTANTES
@@ -72,7 +224,7 @@ TIPOS_ROTINA = ["Reajuste", "Novo Contrato", "Inclusão", "Exclusão", "Ajuste",
 STATUS_ROTINA = ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Cancelada']
 
 TIPOS_AVULSA = ['Credenciamento', 'Descredenciamento', 'Análise de Vulnerabilidade', 'Parametrização', 'Resposta de E-mail', 'RPS', 'Lote de Erros', 'Atendimento de Chamado', 'Atualização Cadastral', 'Outro']
-STATUS_AVULSA = ['Pendente', 'Recebida', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Aguardando Área Demandante', 'Em andamento', 'Concluído', 'Cancelada']
+STATUS_AVULSA = ['Pendente', 'Recebida', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Aguardando Área Demandante', 'Em andamento', 'Devolvido', 'Concluído', 'Cancelada']
 
 TODOS_STATUS_ORDEM = [
     'Pendente',
@@ -133,7 +285,7 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
         </div>
         <div class="col-md-4">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-success mb-3" style="font-size: 3rem;">📋</h1><h4>Credenciamento - Fases</h4><p class="text-muted mb-4">Acompanhamento diário de relatórios e fases de credenciamento.</p>
+                <h1 class="text-success mb-3" style="font-size: 3rem;">📋</h1><h4>Credenciamento - Fases</h4><p class="text-muted mb-4">Acompanhamento diário de relatórios, SLA e fases de credenciamento.</p>
                 <a href="/credenciamento" class="btn btn-success text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
             </div>
         </div>
@@ -141,17 +293,405 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
     {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-6"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a></div></div>{% endif %}
 </div></body></html>"""
 
-TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Credenciamento - Fases</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Credenciamento - Fases</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    .bg-atencao { background-color: #fff3cd !important; }
+    .bg-urgente { background-color: #ffe8cc !important; }
+    .bg-critico { background-color: #f8d7da !important; }
+    .fase-card { transition: transform 0.15s ease-in-out; }
+    .fase-card:hover { transform: translateY(-2px); }
+</style>
+</head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Módulo: Credenciamento - Fases</span></div></nav>
-<div class="container mt-5 text-center">
-    <div class="card shadow-sm border-0 p-5 mx-auto" style="max-width: 650px;">
-        <h1 style="font-size: 4rem;">📋</h1>
-        <h3 class="fw-bold text-success mt-3">Credenciamento - Fases</h3>
-        <p class="text-muted">Estrutura pronta para receber o relatório diário de acompanhamento de fases.</p>
-        <a href="/dashboard" class="btn btn-outline-secondary fw-bold mt-3">⬅ Voltar ao Portal</a>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a>
+    <span class="navbar-text text-white fw-bold">📋 Módulo: Credenciamento - Fases {% if ultima_att %}<small class="text-warning ms-2">(Atualizado em: {{ ultima_att }})</small>{% endif %}</span>
+    <div class="d-flex gap-2">
+        <button class="btn btn-info btn-sm fw-bold text-white" type="button" data-bs-toggle="collapse" data-bs-target="#painelGraficosCred">📊 Mostrar/Ocultar Gráficos</button>
+        <a href="/credenciamento/exportar?{{ request.query_string.decode('utf-8') }}" class="btn btn-success btn-sm fw-bold">⬇ Exportar Visão (Excel)</a>
     </div>
-</div></body></html>"""
+  </div>
+</nav>
+
+<div class="container-fluid mt-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+
+    <!-- Upload Diário do Relatório POSTAL191 -->
+    <div class="card shadow-sm mb-3 border-0">
+        <div class="card-body py-2 bg-white rounded">
+            <form method="POST" action="/credenciamento/upload" enctype="multipart/form-data" class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <span class="fw-bold text-success">🔄 Atualizar Relatório Diário (TXT / CSV / Excel):</span>
+                </div>
+                <div class="col-md-5">
+                    <input type="file" name="arquivo_cred" class="form-control form-control-sm" accept=".txt,.csv,.xlsx,.xls" required>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-success btn-sm w-100 fw-bold" onclick="this.innerHTML='A importar relatório... Aguarde!'; this.style.opacity='0.7';">⬆ Carregar e Atualizar Base</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Monitoramento de SLA do Credenciamento (Apenas EM ANÁLISE; Devolvidos/Deferidos param o SLA) -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 text-secondary fw-bold">⏱️ Monitoramento de SLA por Fase (Em Análise na Visão: {{ sla_resumo.ativos }} | Parados/Concluídos/Devolvidos: {{ registros|length - sla_resumo.ativos }})</h6>
+        <small class="text-muted">Nota: Fases Devolvidas, Deferidas ou Indeferidas param a contagem do SLA automaticamente.</small>
+    </div>
+    <div class="row text-center g-2 mb-3">
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 p-2 h-100" style="background-color: #e2e3e5; color: #383d41;">
+                <small class="fw-bold">No Prazo (0 a 1d)</small>
+                <h3 class="fw-bold mb-0">{{ sla_resumo.no_prazo }}</h3>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 p-2 h-100" style="background-color: #fff3cd; color: #856404;">
+                <small class="fw-bold">Atenção (2 a 3d)</small>
+                <h3 class="fw-bold mb-0">{{ sla_resumo.atencao }}</h3>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 p-2 h-100" style="background-color: #ffe8cc; color: #d35400;">
+                <small class="fw-bold">Urgente (4 a 5d)</small>
+                <h3 class="fw-bold mb-0">{{ sla_resumo.urgente }}</h3>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 p-2 h-100" style="background-color: #f8d7da; color: #721c24;">
+                <small class="fw-bold">Crítico (6+ dias)</small>
+                <h3 class="fw-bold mb-0">{{ sla_resumo.critico }}</h3>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 p-2 h-100 text-white" style="background-color: #6f42c1;">
+                <small class="fw-bold">⚠️ Alerta 90+ Dias (Ativos)</small>
+                <h3 class="fw-bold mb-0">{{ sla_resumo.alerta_90d }}</h3>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 bg-dark text-white p-2 h-100">
+                <small class="fw-bold">Processos Únicos</small>
+                <h3 class="fw-bold mb-0">{{ total_proc_unicos }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards Resumo por Parecer -->
+    <div class="row text-center g-2 mb-3">
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 bg-primary text-white p-2 h-100">
+                <small class="fw-bold">Total na Visão</small>
+                <h4 class="fw-bold mb-0">{{ registros|length }}</h4>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 bg-warning text-dark p-2 h-100">
+                <small class="fw-bold">Parecer: Em Análise (SLA Ativo)</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('EM ANÁLISE', 0) }}</h4>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 bg-success text-white p-2 h-100">
+                <small class="fw-bold">Parecer: Deferidos (SLA Parado)</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('DEFERIDO', 0) }}</h4>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 p-2 h-100 text-white" style="background-color: #fd7e14;">
+                <small class="fw-bold">Devolvidos (SLA Parado)</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('DEVOLVIDO', 0) }}</h4>
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <div class="card shadow-sm border-0 bg-danger text-white p-2 h-100">
+                <small class="fw-bold">Indeferidos (SLA Parado)</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('INDEFERIDO', 0) }}</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos Gerenciais (Colapsável) -->
+    <div class="collapse mb-3" id="painelGraficosCred">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body text-center">
+                        <h6 class="fw-bold text-secondary mb-2">📊 Distribuição por Fase (Visão Atual)</h6>
+                        {% if chart_fases %}<img src="data:image/png;base64,{{ chart_fases }}" class="img-fluid rounded">{% else %}<p class="text-muted py-4">Sem dados para gráfico.</p>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body text-center">
+                        <h6 class="fw-bold text-secondary mb-2">🗺️ Processos por UF (Visão Atual)</h6>
+                        {% if chart_ufs %}<img src="data:image/png;base64,{{ chart_ufs }}" class="img-fluid rounded">{% else %}<p class="text-muted py-4">Sem dados para gráfico.</p>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contagem Rápida por Fase -->
+    {% if kpi_fases %}
+    <div class="row g-2 mb-3">
+        {% for f_nome, f_qtd in kpi_fases %}
+        <div class="col-md-3 col-sm-6">
+            <div class="card fase-card shadow-sm border-0 p-2 h-100" style="border-left: 4px solid #004b87 !important;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small fw-bold text-secondary text-truncate" title="{{ f_nome }}">{{ f_nome }}</span>
+                    <span class="badge bg-primary fs-6 ms-2">{{ f_qtd }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Barra de Filtros -->
+    <div class="card shadow-sm mb-3 border-0 bg-light">
+        <div class="card-body py-2">
+            <form method="GET" action="/credenciamento" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold mb-1">Última Fase (Atual)</label>
+                    <select name="ultima_fase" class="form-select form-select-sm border-primary">
+                        <option value="SIM" {% if f_ultima == 'SIM' %}selected{% endif %}>Apenas Fase Atual (SIM)</option>
+                        <option value="Todos" {% if f_ultima == 'Todos' %}selected{% endif %}>Todo o Histórico (SIM + NÃO)</option>
+                        <option value="NÃO" {% if f_ultima == 'NÃO' %}selected{% endif %}>Fases Anteriores (NÃO)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold mb-1 text-danger">Filtro de SLA</label>
+                    <select name="sla_filtro" class="form-select form-select-sm border-danger">
+                        <option value="Todos" {% if f_sla == 'Todos' %}selected{% endif %}>Todos os SLAs</option>
+                        <option value="No Prazo" {% if f_sla == 'No Prazo' %}selected{% endif %}>No Prazo (0 a 1d)</option>
+                        <option value="Atenção" {% if f_sla == 'Atenção' %}selected{% endif %}>Atenção (2 a 3d)</option>
+                        <option value="Urgente" {% if f_sla == 'Urgente' %}selected{% endif %}>Urgente (4 a 5d)</option>
+                        <option value="Crítico" {% if f_sla == 'Crítico' %}selected{% endif %}>Crítico (6+ dias)</option>
+                        <option value="Parado" {% if f_sla == 'Parado' %}selected{% endif %}>SLA Parado (Deferido/Devolvido)</option>
+                        <option value="90d" {% if f_sla == '90d' %}selected{% endif %}>⚠️ Alerta 90+ Dias (Ativos)</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small fw-bold mb-1">UF</label>
+                    <select name="uf" class="form-select form-select-sm">
+                        <option value="Todos">Todas</option>
+                        {% for u in lista_ufs %}<option value="{{u}}" {% if f_uf == u %}selected{% endif %}>{{u}}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold mb-1">Fase</label>
+                    <select name="fase" class="form-select form-select-sm">
+                        <option value="Todos">Todas as Fases</option>
+                        {% for fa in lista_fases %}<option value="{{fa}}" {% if f_fase == fa %}selected{% endif %}>{{fa}}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small fw-bold mb-1">Parecer</label>
+                    <select name="parecer" class="form-select form-select-sm">
+                        <option value="Todos">Todos</option>
+                        {% for pa in lista_pareceres %}<option value="{{pa}}" {% if f_parecer == pa %}selected{% endif %}>{{pa}}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold mb-1">Responsável</label>
+                    <select name="resp" class="form-select form-select-sm">
+                        <option value="Todos">Todos</option>
+                        {% for re_ in lista_resps %}<option value="{{re_}}" {% if f_resp == re_ %}selected{% endif %}>{{re_}}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold mb-1">Busca (CNPJ / Nome / Proc.)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="busca" class="form-control" placeholder="Digite..." value="{{ f_busca }}">
+                        <button type="submit" class="btn btn-primary fw-bold">🔍</button>
+                        <a href="/credenciamento" class="btn btn-outline-secondary" title="Limpar Filtros">✖</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Processos de Credenciamento -->
+    <div class="card shadow-sm border-0 mb-5">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0 text-secondary fw-bold">Processos de Credenciamento <small class="text-muted">(Duplo clique na linha para ver Linha do Tempo e Parecer Completo)</small></h5>
+                <span class="badge bg-primary fs-6">{{ registros|length }} Registro(s)</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.82em; cursor: pointer;">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Processo</th>
+                            <th>SLA (Fase / Geral)</th>
+                            <th>UF</th>
+                            <th>CNPJ / CPF</th>
+                            <th class="text-start">Prestador / Fantasia</th>
+                            <th>Categoria / Tipo</th>
+                            <th>Abertura</th>
+                            <th class="text-start">Fase</th>
+                            <th>Últ. Fase</th>
+                            <th>Entrada Fase</th>
+                            <th>Próx. Alçada</th>
+                            <th>Parecer</th>
+                            <th>Origem</th>
+                            <th>Responsável</th>
+                            <th>Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in registros %}
+                        {% set r = item.row %}
+                        {% set s = item.sla %}
+                        <tr class="{{ s.cor_linha }}" ondblclick="verHistoricoProcesso('{{ r[8] }}')">
+                            <td class="fw-bold text-primary">{{ r[8] }}</td>
+                            <td>
+                                {% if s.ativo %}
+                                    <span class="badge bg-{{ 'danger' if s.dias_fase >= 6 else 'warning text-dark' if s.dias_fase >= 2 else 'secondary' }} mb-1">Fase: {{ s.dias_fase }}d</span><br>
+                                    <span class="badge" style="background-color: {{ '#6f42c1' if s.estourou_90d else '#6c757d' }};">Geral: {{ s.dias_geral }}d {{ '⚠️' if s.estourou_90d else '' }}</span>
+                                {% else %}
+                                    <span class="badge bg-{{ 'secondary' if r[20]=='DEVOLVIDO' else 'danger' if r[20]=='INDEFERIDO' else 'success' }} mb-1">SLA Parado ({{ s.dias_fase }}d)</span><br>
+                                    <small class="text-muted">Geral: {{ s.dias_geral }}d</small>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-secondary">{{ r[1] }}</span></td>
+                            <td>{{ r[2] }}</td>
+                            <td class="text-start">
+                                <div class="fw-bold">{{ r[3] }}</div>
+                                {% if r[4] and r[4] != r[3] %}<small class="text-muted">{{ r[4] }}</small>{% endif %}
+                                {% if r[28] %}<br><span class="badge bg-light text-dark border">{{ r[28] }}</span>{% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-info text-dark">{{ r[6] }}</span><br>
+                                <small class="text-muted">{{ r[5] }}</small>
+                            </td>
+                            <td>{{ r[9] }}</td>
+                            <td class="text-start fw-bold">{{ r[12] }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'primary' if r[13] == 'SIM' else 'light text-muted border' }}">{{ r[13] }}</span>
+                            </td>
+                            <td>{{ r[14] }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ r[16] if r[16] else '-' }}</span></td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if r[20]=='DEFERIDO' else 'warning text-dark' if r[20]=='EM ANÁLISE' else 'danger' if r[20]=='INDEFERIDO' else 'secondary' }}">{{ r[20] }}</span>
+                            </td>
+                            <td><strong>{{ r[22] }}</strong></td>
+                            <td>{{ r[11] }}</td>
+                            <td>
+                                <button type="button" class="btn btn-outline-primary btn-sm fw-bold" onclick="verHistoricoProcesso('{{ r[8] }}')" title="Ver Linha do Tempo e Pareceres">🔍</button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="15" class="text-center text-muted py-4 fs-6">Nenhum processo encontrado. Carregue o relatório diário acima ou ajuste os filtros.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Linha do Tempo e Detalhes do Processo -->
+<div class="modal fade" id="modalHistoricoCred" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title fw-bold" id="tituloModalCred">📋 Histórico Completo do Processo</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="corpoModalCred">
+        <div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2">A carregar linha do tempo...</p></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function verHistoricoProcesso(numProcesso) {
+    let modalEl = document.getElementById('modalHistoricoCred');
+    let modal = new bootstrap.Modal(modalEl);
+    document.getElementById('tituloModalCred').innerText = '📋 Linha do Tempo - Processo Nº ' + numProcesso;
+    let corpo = document.getElementById('corpoModalCred');
+    corpo.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2">A procurar histórico do processo...</p></div>';
+    modal.show();
+
+    fetch('/api/credenciamento/processo/' + encodeURIComponent(numProcesso))
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro || !data.etapas || data.etapas.length === 0) {
+            corpo.innerHTML = '<div class="alert alert-warning">Não foi possível carregar os detalhes deste processo.</div>';
+            return;
+        }
+        let info = data.etapas[0];
+        let html = `
+            <div class="card bg-light border-0 mb-3">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="fw-bold text-primary mb-1">${info.nome}</h5>
+                            <p class="mb-1 text-muted small"><strong>Fantasia:</strong> ${info.fantasia || '-'} | <strong>CNPJ/CPF:</strong> ${info.cnpj_cpf}</p>
+                            <p class="mb-0 small"><strong>Tipo Prestador:</strong> ${info.tipo_prestador} | <strong>Categoria:</strong> ${info.categoria}</p>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <span class="badge bg-dark fs-6">Processo: ${info.processo}</span>
+                            <span class="badge bg-secondary fs-6">UF: ${info.filial}</span>
+                            <p class="mb-0 small mt-2"><strong>Data de Abertura:</strong> ${info.data_abertura} | <strong>Grupo:</strong> ${info.grupo_prestadores || '-'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <h6 class="fw-bold text-secondary mb-3">⏳ Etapas e Pareceres Registados (${data.etapas.length}):</h6>
+        `;
+
+        data.etapas.forEach((et, idx) => {
+            let badgeCor = et.parecer === 'DEFERIDO' ? 'success' : (et.parecer === 'EM ANÁLISE' ? 'warning text-dark' : (et.parecer === 'INDEFERIDO' ? 'danger' : 'secondary'));
+            let destaqueAtual = et.ultima_fase === 'SIM' ? 'border-primary border-2' : '';
+            let obsFormatada = (et.observacao || 'Sem observações registadas.').replace(/--/g, '\\n');
+            html += `
+                <div class="card shadow-sm mb-3 ${destaqueAtual}">
+                    <div class="card-header d-flex justify-content-between align-items-center ${et.ultima_fase === 'SIM' ? 'bg-primary text-white' : 'bg-white'}">
+                        <div>
+                            <strong>#${idx + 1} - ${et.fase}</strong>
+                            ${et.ultima_fase === 'SIM' ? '<span class="badge bg-warning text-dark ms-2">⭐ FASE ATUAL</span>' : ''}
+                        </div>
+                        <div>
+                            <span class="badge bg-${badgeCor}">${et.parecer || '-'}</span>
+                            <span class="badge bg-dark ms-1">${et.origem_parecer || '-'}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row small text-muted mb-2">
+                            <div class="col-md-3"><strong>Responsável:</strong> ${et.usuario_resp || '-'}</div>
+                            <div class="col-md-3"><strong>Início / Fim:</strong> ${et.data_inicial || '-'} a ${et.data_final || '-'}</div>
+                            <div class="col-md-3"><strong>Dias (Relatório):</strong> ${et.dias_percorridos || '0'}d / ${et.dias_percorridos_pf || '0'}d</div>
+                            <div class="col-md-3"><strong>Próx. Fase:</strong> ${et.proxima_fase || '-'}</div>
+                        </div>
+                        ${et.justificativa_indef ? `<p class="mb-2 small"><strong>Motivo / Enquadramento:</strong> <span class="text-danger fw-bold">${et.justificativa_indef}</span></p>` : ''}
+                        <div class="p-3 bg-light rounded border small" style="white-space: pre-wrap;">${obsFormatada}</div>
+                        ${(et.data_aprovacao || et.usuario_aprj || et.justificativa_corgen) ? `
+                        <div class="mt-2 pt-2 border-top small text-secondary">
+                            <strong>Aprovação Sede:</strong> ${et.data_aprovacao || '-'} | <strong>Aprovador:</strong> ${et.usuario_aprj || '-'} | <strong> Despacho:</strong> ${et.justificativa_corgen || '-'}
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        corpo.innerHTML = html;
+    })
+    .catch(e => {
+        corpo.innerHTML = '<div class="alert alert-danger">Erro ao comunicar com o servidor.</div>';
+    });
+}
+</script>
+</body></html>"""
 
 TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel Administrativo</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -261,6 +801,7 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
             <thead class="table-dark"><tr><th>ID</th><th>SLA (Dias)</th><th>Tipo</th><th>Assunto</th><th>Solicitante</th><th>Entrada</th><th>Prazo</th><th>Status</th><th>Resp.</th><th>Conclusão</th><th>Ações</th></tr></thead>
             <tbody>{% for d in demandas %}
             {% set sla = calc_sla(d[4], d[6]) %}
+            {% set dias_fech = calc_fechados(d[4], d[8]) %}
             {% set row_class = '' %}
             {% if sla >= 6 %}{% set row_class = 'bg-critico' %}
             {% elif sla >= 4 %}{% set row_class = 'bg-urgente' %}
@@ -272,16 +813,16 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
                     {% if sla >= 0 %}
                         <span class="badge bg-{{ 'danger' if sla >= 6 else 'warning text-dark' if sla >= 4 else 'secondary' }}">{{ sla }} dia(s)</span>
                     {% else %}
-                        <span class="text-muted fw-bold">-</span>
+                        <span class="badge bg-{{ 'secondary' if d[6]=='Devolvido' else 'success' }}">Parado {{ '(' ~ dias_fech ~ 'd)' if dias_fech is not none else '' }}</span>
                     {% endif %}
                 </td>
                 <td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
-                <td><span class="badge bg-{{ 'dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'warning text-dark' if d[6]=='Aguardando 90 dias' else 'info' }}">{{ d[6] }}</span></td>
+                <td><span class="badge bg-{{ 'dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'danger' if d[6]=='Devolvido' else 'warning text-dark' if d[6]=='Aguardando 90 dias' else 'info' }}">{{ d[6] }}</span></td>
                 <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
                 <td>
                     <form method="POST" action="/demandas/avulsas" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
-                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Assumir">✋</button>
-                        <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] == 'Concluído' %}disabled{% endif %} title="Concluir">✔</button>
+                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[6] in ('Concluído', 'Devolvido') %}disabled{% endif %} title="Assumir">✋</button>
+                        <button type="submit" name="acao" value="concluir" class="btn btn-success btn-sm fw-bold" {% if d[6] in ('Concluído', 'Devolvido') %}disabled{% endif %} title="Concluir">✔</button>
                     </form>
                     <button id="btn-edit-avulsa-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar" 
                         data-id="{{ d[0] }}" data-tipo="{{ d[1] }}" data-assunto="{{ d[2] }}" data-sol="{{ d[3] }}" 
@@ -396,6 +937,8 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <tbody>{% for d in rotinas %}
             {% set sla_cocap = calc_sla(d[9], d[3]) %}
             {% set sla_geral = calc_sla(d[18], d[3]) %}
+            {% set dias_fech_cocap = calc_fechados(d[9], d[19]) %}
+            {% set dias_fech_geral = calc_fechados(d[18], d[19]) %}
             {% set row_class = '' %}
             {% if sla_cocap >= 6 %}{% set row_class = 'bg-critico' %}
             {% elif sla_cocap >= 4 %}{% set row_class = 'bg-urgente' %}
@@ -407,13 +950,13 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                     {% if sla_cocap >= 0 %}
                         <span class="badge bg-{{ 'danger' if sla_cocap >= 6 else 'warning text-dark' if sla_cocap >= 4 else 'secondary' }} mb-1">COCAP: {{ sla_cocap }}d</span><br>
                     {% else %}
-                        <span class="badge bg-success mb-1">COCAP: OK</span><br>
+                        <span class="badge bg-{{ 'secondary' if d[3]=='Devolvido' else 'success' }} mb-1">COCAP: Parado {{ '(' ~ dias_fech_cocap ~ 'd)' if dias_fech_cocap is not none else '' }}</span><br>
                     {% endif %}
                     
                     {% if sla_geral >= 0 %}
                         <span class="badge bg-{{ 'danger' if sla_geral >= 15 else 'warning text-dark' if sla_geral >= 10 else 'secondary' }}">Geral: {{ sla_geral }}d</span>
-                    {% elif d[18] and d[3] in ['Finalizada', 'Concluído'] %}
-                        <span class="badge bg-success">Geral: OK</span>
+                    {% elif d[18] and d[3] in ['Finalizada', 'Concluído', 'Devolvido', 'Cancelada'] %}
+                        <span class="badge bg-{{ 'secondary' if d[3]=='Devolvido' else 'success' }}">Geral: Parado {{ '(' ~ dias_fech_geral ~ 'd)' if dias_fech_geral is not none else '' }}</span>
                     {% else %}
                         <span class="badge bg-light text-muted border">Geral: -</span>
                     {% endif %}
@@ -423,8 +966,8 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                 <td>{{ d[4] }}</td>
                 <td>
                     <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
-                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Assumir">✋</button>
-                        <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Finalizar">✔</button>
+                        <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] in ('Finalizada', 'Devolvido') %}disabled{% endif %} title="Assumir">✋</button>
+                        <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] in ('Finalizada', 'Devolvido') %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
                     <button id="btn-edit-rot-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Informações"
                         data-id="{{ d[0] }}" data-status="{{ d[3] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
@@ -569,9 +1112,10 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
         {% endfor %}
     </div>
     
-    <!-- SLA COCAP -->
-    <h5 class="mb-0 text-secondary fw-bold mt-4">⏱️ Monitoramento de SLA COCAP (Demandas em Aberto: {{ total_ativas }})</h5>
-    <div class="row text-center mt-3 mb-4 g-3">
+    <!-- SLA COCAP (Apenas Demandas Ativas - Exclui Finalizadas, Concluídas e Devolvidas) -->
+    <h5 class="mb-0 text-secondary fw-bold mt-4">⏱️ Monitoramento de SLA COCAP (Demandas Ativas em Aberto: {{ total_ativas }})</h5>
+    <small class="text-muted">Processos Finalizados, Concluídos, Devolvidos ou Cancelados têm o SLA parado e não entram nesta fila.</small>
+    <div class="row text-center mt-2 mb-4 g-3">
         <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #e2e3e5; color: #383d41;"><h6 class="mb-1 fw-bold">No Prazo (0 a 1 dia)</h6><h2 class="fw-bold mb-0">{{ sla_em_dia }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h6 class="mb-1 fw-bold">Atenção (2 a 3 dias)</h6><h2 class="fw-bold mb-0">{{ sla_atencao }}</h2></div></div>
         <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h6 class="mb-1 fw-bold">Urgente (4 a 5 dias)</h6><h2 class="fw-bold mb-0">{{ sla_urgente }}</h2></div></div>
@@ -893,7 +1437,7 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
 
 
 # ==========================================
-# FUNÇÕES DE APOIO PENTE FINO (PANDAS)
+# FUNÇÕES DE APOIO PENTE FINO E ARQUIVOS
 # ==========================================
 def normalizar_texto(texto):
     if pd.isna(texto) or str(texto).lower() in ['nan', 'none', '']: return ""
@@ -925,12 +1469,38 @@ def extrair_especialidades(series):
 
 def ler_arquivo(file_obj, nrows=None):
     filename = file_obj.filename.lower()
-    if filename.endswith('.csv'):
-        try: return pd.read_csv(file_obj, sep=';', encoding='latin1', dtype=str, nrows=nrows)
-        except: 
-            file_obj.seek(0)
-            return pd.read_csv(file_obj, sep=',', encoding='utf-8', dtype=str, nrows=nrows)
-    else: return pd.read_excel(file_obj, dtype=str, nrows=nrows)
+    if filename.endswith('.csv') or filename.endswith('.txt'):
+        raw_bytes = file_obj.read()
+        file_obj.seek(0)
+        texto_decodificado = None
+        for enc in ['utf-8-sig', 'utf-8', 'cp1250', 'iso-8859-2', 'latin1', 'cp1252']:
+            try:
+                t = raw_bytes.decode(enc)
+                if 'Ź' in t or 'FILIALPADRAO' in t or ';' in t:
+                    texto_decodificado = t
+                    break
+            except Exception:
+                continue
+        if texto_decodificado is None:
+            texto_decodificado = raw_bytes.decode('latin1', errors='replace')
+            
+        primeira_linha = texto_decodificado.splitlines()[0] if texto_decodificado else ""
+        sep = ';'
+        if 'Ź' in primeira_linha:
+            sep = 'Ź'
+        elif '\x8f' in primeira_linha:
+            sep = '\x8f'
+        elif '|' in primeira_linha:
+            sep = '|'
+        elif '\t' in primeira_linha:
+            sep = '\t'
+        elif ',' in primeira_linha and ';' not in primeira_linha:
+            sep = ','
+            
+        from io import StringIO
+        return pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, engine='python')
+    else:
+        return pd.read_excel(file_obj, dtype=str, nrows=nrows)
 
 
 # ==========================================
@@ -1003,10 +1573,291 @@ def dashboard():
     if 'user' not in session: return redirect(url_for('login'))
     return render_template_string(TELA_DASHBOARD, user=session['user'], role=session['role'])
 
+# -------- ROTAS DO MÓDULO CREDENCIAMENTO - FASES --------
 @app.route('/credenciamento')
 def credenciamento_fases():
     if 'user' not in session: return redirect(url_for('login'))
-    return render_template_string(TELA_CREDENCIAMENTO_FASES)
+    inicializar_tabela_credenciamento()
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+
+    f_ultima = request.args.get('ultima_fase', 'SIM')
+    f_sla = request.args.get('sla_filtro', 'Todos')
+    f_uf = request.args.get('uf', 'Todos')
+    f_fase = request.args.get('fase', 'Todos')
+    f_parecer = request.args.get('parecer', 'Todos')
+    f_origem = request.args.get('origem', 'Todos')
+    f_resp = request.args.get('resp', 'Todos')
+    f_busca = request.args.get('busca', '').strip()
+
+    q = "SELECT * FROM credenciamento_fases WHERE 1=1"
+    p = []
+    if f_ultima != 'Todos':
+        q += f" AND ultima_fase={ph}"; p.append(f_ultima)
+    if f_uf != 'Todos':
+        q += f" AND filial={ph}"; p.append(f_uf)
+    if f_fase != 'Todos':
+        q += f" AND fase={ph}"; p.append(f_fase)
+    if f_parecer != 'Todos':
+        q += f" AND parecer={ph}"; p.append(f_parecer)
+    if f_origem != 'Todos':
+        q += f" AND origem_parecer={ph}"; p.append(f_origem)
+    if f_resp != 'Todos':
+        q += f" AND usuario_resp={ph}"; p.append(f_resp)
+    if f_busca:
+        termo = f"%{f_busca.upper()}%"
+        q += f" AND (UPPER(cnpj_cpf) LIKE {ph} OR UPPER(nome) LIKE {ph} OR UPPER(fantasia) LIKE {ph} OR UPPER(processo) LIKE {ph})"
+        p.extend([termo, termo, termo, termo])
+
+    q += " ORDER BY id ASC"
+    c.execute(q, tuple(p))
+    rows_brutas = c.fetchall()
+
+    registros = []
+    sla_resumo = {"ativos": 0, "no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0, "alerta_90d": 0}
+    kpi_parecer = {}
+    kpi_fases_dict = {}
+    kpi_ufs_dict = {}
+    proc_set = set()
+
+    for r in rows_brutas:
+        info_sla = calcular_sla_credenciamento(r)
+        if f_sla != 'Todos':
+            if f_sla == '90d' and not info_sla['estourou_90d']:
+                continue
+            elif f_sla != '90d' and info_sla['faixa_sla'] != f_sla:
+                continue
+
+        registros.append({"row": r, "sla": info_sla})
+
+        if info_sla["ativo"]:
+            sla_resumo["ativos"] += 1
+            if info_sla["faixa_sla"] == "Crítico": sla_resumo["critico"] += 1
+            elif info_sla["faixa_sla"] == "Urgente": sla_resumo["urgente"] += 1
+            elif info_sla["faixa_sla"] == "Atenção": sla_resumo["atencao"] += 1
+            else: sla_resumo["no_prazo"] += 1
+            if info_sla["estourou_90d"]: sla_resumo["alerta_90d"] += 1
+
+        par = r[20] if r[20] else 'SEM PARECER'
+        kpi_parecer[par] = kpi_parecer.get(par, 0) + 1
+        fa = r[12] if r[12] else 'SEM FASE'
+        kpi_fases_dict[fa] = kpi_fases_dict.get(fa, 0) + 1
+        uf_val = r[1] if r[1] else 'S/UF'
+        kpi_ufs_dict[uf_val] = kpi_ufs_dict.get(uf_val, 0) + 1
+        if r[8]: proc_set.add(r[8])
+
+    kpi_fases = sorted(kpi_fases_dict.items(), key=lambda x: x[0])
+
+    chart_fases = ""
+    if kpi_fases:
+        fig1, ax1 = plt.subplots(figsize=(6.5, 3.8))
+        nomes_f = [k[0][:28] for k in kpi_fases]
+        vals_f = [k[1] for k in kpi_fases]
+        ax1.barh(nomes_f, vals_f, color='#004b87')
+        ax1.invert_yaxis()
+        ax1.tick_params(axis='y', labelsize=8)
+        buf1 = BytesIO(); fig1.tight_layout(); fig1.savefig(buf1, format="png"); buf1.seek(0)
+        chart_fases = base64.b64encode(buf1.read()).decode('utf-8'); plt.close(fig1)
+
+    chart_ufs = ""
+    if kpi_ufs_dict:
+        ufs_ord = sorted(kpi_ufs_dict.items(), key=lambda x: x[1], reverse=True)
+        fig2, ax2 = plt.subplots(figsize=(6.5, 3.8))
+        ax2.bar([u[0] for u in ufs_ord], [u[1] for u in ufs_ord], color='#198754')
+        buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
+        chart_ufs = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
+
+    c.execute("SELECT DISTINCT filial FROM credenciamento_fases WHERE filial IS NOT NULL AND filial != '' ORDER BY filial")
+    lista_ufs = [r[0] for r in c.fetchall()]
+    c.execute("SELECT DISTINCT fase FROM credenciamento_fases WHERE fase IS NOT NULL AND fase != '' ORDER BY fase")
+    lista_fases = [r[0] for r in c.fetchall()]
+    c.execute("SELECT DISTINCT parecer FROM credenciamento_fases WHERE parecer IS NOT NULL AND parecer != '' ORDER BY parecer")
+    lista_pareceres = [r[0] for r in c.fetchall()]
+    c.execute("SELECT DISTINCT origem_parecer FROM credenciamento_fases WHERE origem_parecer IS NOT NULL AND origem_parecer != '' ORDER BY origem_parecer")
+    lista_origens = [r[0] for r in c.fetchall()]
+    c.execute("SELECT DISTINCT usuario_resp FROM credenciamento_fases WHERE usuario_resp IS NOT NULL AND usuario_resp != '' ORDER BY usuario_resp")
+    lista_resps = [r[0] for r in c.fetchall()]
+    c.execute("SELECT MAX(data_atualizacao) FROM credenciamento_fases")
+    row_att = c.fetchone()
+    ultima_att = row_att[0] if row_att and row_att[0] else None
+
+    conn.close()
+    return render_template_string(
+        TELA_CREDENCIAMENTO_FASES,
+        registros=registros,
+        sla_resumo=sla_resumo,
+        kpi_parecer=kpi_parecer,
+        kpi_fases=kpi_fases,
+        chart_fases=chart_fases,
+        chart_ufs=chart_ufs,
+        total_proc_unicos=len(proc_set),
+        lista_ufs=lista_ufs,
+        lista_fases=lista_fases,
+        lista_pareceres=lista_pareceres,
+        lista_origens=lista_origens,
+        lista_resps=lista_resps,
+        f_ultima=f_ultima, f_sla=f_sla, f_uf=f_uf, f_fase=f_fase, f_parecer=f_parecer, f_origem=f_origem, f_resp=f_resp, f_busca=f_busca,
+        ultima_att=ultima_att
+    )
+
+@app.route('/credenciamento/upload', methods=['POST'])
+def upload_credenciamento():
+    if 'user' not in session: return redirect(url_for('login'))
+    file = request.files.get('arquivo_cred')
+    if not file or file.filename == '':
+        flash("Selecione um arquivo válido.", "warning")
+        return redirect(url_for('credenciamento_fases'))
+
+    try:
+        inicializar_tabela_credenciamento()
+        df = ler_arquivo(file)
+        df.columns = [corrigir_encoding_postal(c).strip().upper() for c in df.columns]
+        df = df.loc[:, ~df.columns.str.contains('^UNNAMED')]
+
+        def get_val(row, col_names):
+            for cn in col_names:
+                if cn in row and pd.notna(row[cn]):
+                    return corrigir_encoding_postal(row[cn])
+            return ""
+
+        dt_att = datetime.now().strftime("%d/%m/%Y %H:%M")
+        linhas_para_inserir = []
+        for _, row in df.iterrows():
+            filial = get_val(row, ['FILIALPADRAO', 'FILIAL', 'UF'])
+            cnpj_cpf = get_val(row, ['CNPJCPF', 'CNPJ', 'CPF'])
+            if not filial and not cnpj_cpf:
+                continue
+            ultima_f = get_val(row, ['ULTIMAFASE', 'ULTIMA_FASE']).upper()
+            if ultima_f in ['NAO', 'NĂO', 'NÃO', 'N']:
+                ultima_f = 'NÃO'
+            elif ultima_f in ['SIM', 'S']:
+                ultima_f = 'SIM'
+
+            linhas_para_inserir.append((
+                filial,
+                cnpj_cpf,
+                get_val(row, ['NOME', 'RAZAO SOCIAL']),
+                get_val(row, ['FANTASIA', 'NOME FANTASIA']),
+                get_val(row, ['TIPOPRESTADOR', 'TIPO PRESTADOR']),
+                get_val(row, ['CATEGORIA']),
+                get_val(row, ['TIPOPROCESSO', 'TIPO PROCESSO']),
+                get_val(row, ['PROCESSO', 'NUM PROCESSO']),
+                get_val(row, ['DATADATAABERTURAPROCESSO', 'DATAABERTURAPROCESSO', 'DATA ABERTURA']),
+                get_val(row, ['DATAFINALPROCESSO', 'DATA FINAL PROCESSO']),
+                get_val(row, ['USUARIORESPONSAVEL', 'RESPONSAVEL']),
+                get_val(row, ['FASE']),
+                ultima_f,
+                get_val(row, ['DATAINICIAL', 'DATA INICIAL']),
+                get_val(row, ['DATAFINAL', 'DATA FINAL']),
+                get_val(row, ['K_PROXIMAFASE', 'PROXIMAFASE']),
+                get_val(row, ['K_DIASPERCORRIDOS', 'DIASPERCORRIDOS']),
+                get_val(row, ['K_DIASPERCORRIDOSPF', 'DIASPERCORRIDOSPF']),
+                get_val(row, ['JUSTIFICATIVAINDEFERIMENTO']),
+                get_val(row, ['PARECER']).upper(),
+                get_val(row, ['OBSERVACAO']),
+                get_val(row, ['ORIGEMPARECER']).upper(),
+                get_val(row, ['DATAAPROVACAO']),
+                get_val(row, ['DATAREJEICAO']),
+                get_val(row, ['USUARIOAPRJ']),
+                get_val(row, ['K_JUSTIFICATIVACORGEN']),
+                get_val(row, ['USUARIONOTIFICACAO']),
+                get_val(row, ['GRUPO_PRESTADORES']),
+                dt_att
+            ))
+
+        conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+        c.execute("DELETE FROM credenciamento_fases")
+        sincronizar_sequencias()
+        placeholders = ", ".join([ph] * 29)
+        q_ins = f"""
+            INSERT INTO credenciamento_fases (
+                filial, cnpj_cpf, nome, fantasia, tipo_prestador, categoria, tipo_processo,
+                processo, data_abertura, data_final_proc, usuario_resp, fase, ultima_fase,
+                data_inicial, data_final, proxima_fase, dias_percorridos, dias_percorridos_pf,
+                justificativa_indef, parecer, observacao, origem_parecer, data_aprovacao,
+                data_rejeicao, usuario_aprj, justificativa_corgen, usuario_notificacao,
+                grupo_prestadores, data_atualizacao
+            ) VALUES ({placeholders})
+        """
+        c.executemany(q_ins, linhas_para_inserir)
+        conn.commit(); conn.close()
+        flash(f"Relatório atualizado com sucesso! {len(linhas_para_inserir)} registros de fases importados.", "success")
+    except Exception as e:
+        flash(f"Erro ao processar relatório de Credenciamento: {e}", "danger")
+
+    return redirect(url_for('credenciamento_fases'))
+
+@app.route('/api/credenciamento/processo/<num_proc>')
+def api_historico_credenciamento(num_proc):
+    if 'user' not in session: return jsonify({"erro": "Não autorizado"}), 401
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    c.execute(f"SELECT * FROM credenciamento_fases WHERE processo={ph} ORDER BY id ASC", (num_proc,))
+    rows = c.fetchall()
+    conn.close()
+    etapas = []
+    for r in rows:
+        etapas.append({
+            "id": r[0], "filial": r[1], "cnpj_cpf": r[2], "nome": r[3], "fantasia": r[4],
+            "tipo_prestador": r[5], "categoria": r[6], "tipo_processo": r[7], "processo": r[8],
+            "data_abertura": r[9], "data_final_proc": r[10], "usuario_resp": r[11], "fase": r[12],
+            "ultima_fase": r[13], "data_inicial": r[14], "data_final": r[15], "proxima_fase": r[16],
+            "dias_percorridos": r[17], "dias_percorridos_pf": r[18], "justificativa_indef": r[19],
+            "parecer": r[20], "observacao": r[21], "origem_parecer": r[22], "data_aprovacao": r[23],
+            "data_rejeicao": r[24], "usuario_aprj": r[25], "justificativa_corgen": r[26],
+            "usuario_notificacao": r[27], "grupo_prestadores": r[28]
+        })
+    return jsonify({"etapas": etapas})
+
+@app.route('/credenciamento/exportar')
+def exportar_credenciamento():
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    f_ultima = request.args.get('ultima_fase', 'SIM')
+    f_sla = request.args.get('sla_filtro', 'Todos')
+    f_uf = request.args.get('uf', 'Todos')
+    f_fase = request.args.get('fase', 'Todos')
+    f_parecer = request.args.get('parecer', 'Todos')
+    f_origem = request.args.get('origem', 'Todos')
+    f_resp = request.args.get('resp', 'Todos')
+    f_busca = request.args.get('busca', '').strip()
+
+    q = "SELECT * FROM credenciamento_fases WHERE 1=1"
+    p = []
+    if f_ultima != 'Todos': q += f" AND ultima_fase={ph}"; p.append(f_ultima)
+    if f_uf != 'Todos': q += f" AND filial={ph}"; p.append(f_uf)
+    if f_fase != 'Todos': q += f" AND fase={ph}"; p.append(f_fase)
+    if f_parecer != 'Todos': q += f" AND parecer={ph}"; p.append(f_parecer)
+    if f_origem != 'Todos': q += f" AND origem_parecer={ph}"; p.append(f_origem)
+    if f_resp != 'Todos': q += f" AND usuario_resp={ph}"; p.append(f_resp)
+    if f_busca:
+        termo = f"%{f_busca.upper()}%"
+        q += f" AND (UPPER(cnpj_cpf) LIKE {ph} OR UPPER(nome) LIKE {ph} OR UPPER(fantasia) LIKE {ph} OR UPPER(processo) LIKE {ph})"
+        p.extend([termo, termo, termo, termo])
+    q += " ORDER BY id ASC"
+    c.execute(q, tuple(p))
+    rows_brutas = c.fetchall()
+    conn.close()
+
+    dados_exp = []
+    for r in rows_brutas:
+        info_sla = calcular_sla_credenciamento(r)
+        if f_sla != 'Todos':
+            if f_sla == '90d' and not info_sla['estourou_90d']:
+                continue
+            elif f_sla != '90d' and info_sla['faixa_sla'] != f_sla:
+                continue
+        dados_exp.append([
+            r[8], info_sla['faixa_sla'], info_sla['dias_fase'], info_sla['dias_geral'],
+            r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[9], r[11], r[12], r[13],
+            r[14], r[15], r[16], r[19], r[20], r[21], r[22], r[23], r[25], r[28]
+        ])
+
+    cols = ["Processo", "Status_SLA", "SLA_Dias_Fase", "SLA_Dias_Geral", "UF", "CNPJ_CPF", "Nome", "Fantasia", "Tipo_Prestador", "Categoria", "Tipo_Processo", "Data_Abertura", "Responsavel", "Fase", "Ultima_Fase", "Data_Inicial", "Data_Final", "Proxima_Fase", "Motivo", "Parecer", "Observacao", "Origem", "Data_Aprovacao", "Aprovador", "Grupo"]
+    df_exp = pd.DataFrame(dados_exp, columns=cols)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_exp.to_excel(writer, sheet_name='Credenciamento_Fases', index=False)
+    output.seek(0)
+    return send_file(output, download_name=f"Credenciamento_Fases_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.xlsx", as_attachment=True)
 
 @app.route('/logout')
 def logout():
@@ -1041,13 +1892,19 @@ def exportar_backup():
         conn = conectar_db()
         df_demands = pd.read_sql_query("SELECT * FROM demands", conn)
         df_avulsas = pd.read_sql_query("SELECT * FROM demandas_avulsas", conn)
-        df_users = pd.read_sql_query("SELECT * FROM users", conn) 
+        df_users = pd.read_sql_query("SELECT * FROM users", conn)
+        try:
+            df_cred = pd.read_sql_query("SELECT * FROM credenciamento_fases", conn)
+        except Exception:
+            df_cred = pd.DataFrame()
         conn.close()
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_demands.to_excel(writer, sheet_name='Rotina_PDFs', index=False)
             df_avulsas.to_excel(writer, sheet_name='Demandas_Avulsas', index=False)
             df_users.to_excel(writer, sheet_name='Usuarios', index=False)
+            if not df_cred.empty:
+                df_cred.to_excel(writer, sheet_name='Credenciamento_Fases', index=False)
         output.seek(0)
         return send_file(output, download_name=f"Backup_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.xlsx", as_attachment=True)
     except Exception as e: flash(f"Erro ao gerar backup: {e}", "danger"); return redirect(url_for('admin'))
@@ -1062,7 +1919,7 @@ def importar_backup():
         conn = conectar_db(); c = conn.cursor(); is_postgres = "psycopg2" in str(type(conn))
         if filename.endswith('.xlsx'):
             xls = pd.ExcelFile(file); sheets = xls.sheet_names
-            mapeamento = {'Rotina_PDFs': 'demands', 'Demandas_Avulsas': 'demandas_avulsas', 'Usuarios': 'users'}
+            mapeamento = {'Rotina_PDFs': 'demands', 'Demandas_Avulsas': 'demandas_avulsas', 'Usuarios': 'users', 'Credenciamento_Fases': 'credenciamento_fases'}
             for aba, tabela in mapeamento.items():
                 if aba in sheets:
                     df = pd.read_excel(xls, sheet_name=aba); c.execute(f"DELETE FROM {tabela}") 
@@ -1074,7 +1931,7 @@ def importar_backup():
             temp_db = os.path.join(tempfile.gettempdir(), "temp_migration.db")
             file.save(temp_db) 
             sqlite_conn = sqlite3.connect(temp_db); sqlite_c = sqlite_conn.cursor()
-            for tabela in ['demands', 'demandas_avulsas', 'users']:
+            for tabela in ['demands', 'demandas_avulsas', 'users', 'credenciamento_fases']:
                 try:
                     sqlite_c.execute(f"SELECT * FROM {tabela}"); rows = sqlite_c.fetchall()
                     if rows:
@@ -1124,7 +1981,7 @@ def demandas_avulsas():
     if r_filtro != 'Todos': q += f" AND responsavel={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); demandas = c.fetchall()
     c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla)
+    return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla, calc_fechados=calcular_dias_fechados)
 
 @app.route('/demandas/avulsas/editar', methods=['POST'])
 def editar_avulsa():
@@ -1135,8 +1992,14 @@ def editar_avulsa():
 
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
     try:
-        c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph} WHERE id={ph}",
-                  (tipo, assunto, solicitante, prazo, status, resp, obs, d_id))
+        # Se mudou para Concluído, Finalizada, Devolvido ou Cancelada, grava a data de conclusão para congelar o SLA
+        if str(status or '').strip().upper() in STATUS_ENCERRADOS_DEMANDAS:
+            dt_fim = datetime.now().strftime("%d/%m/%Y")
+            c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph}, data_conclusao=COALESCE(NULLIF(data_conclusao, ''), {ph}) WHERE id={ph}",
+                      (tipo, assunto, solicitante, prazo, status, resp, obs, dt_fim, d_id))
+        else:
+            c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph} WHERE id={ph}",
+                      (tipo, assunto, solicitante, prazo, status, resp, obs, d_id))
         conn.commit()
         flash("Demanda Avulsa atualizada com sucesso!", "success")
     except Exception as e:
@@ -1157,7 +2020,7 @@ def demandas_rotinas():
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
     c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, status_list=STATUS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla)
+    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, status_list=STATUS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla, calc_fechados=calcular_dias_fechados)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
 def upload_rotinas():
@@ -1260,10 +2123,19 @@ def editar_rotina():
     proc = request.form.get('tipo_processo'); fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
     resp = request.form.get('responsavel'); data_fop = request.form.get('data_aprovacao')
 
+    # Se o usuário marcou DEVOLVIDO no Tipo Processo, sincroniza o status para Devolvido
+    if str(proc or '').strip().upper() == 'DEVOLVIDO' and status not in ['Finalizada', 'Cancelada']:
+        status = 'Devolvido'
+
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
     try:
-        c.execute(f"UPDATE demands SET status={ph}, assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph} WHERE id={ph}",
-                  (status, resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, d_id))
+        if str(status or '').strip().upper() in STATUS_ENCERRADOS_DEMANDAS:
+            dt_fim = datetime.now().strftime("%d/%m/%Y %H:%M")
+            c.execute(f"UPDATE demands SET status={ph}, assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph}, data_finalizacao=COALESCE(NULLIF(data_finalizacao, ''), {ph}) WHERE id={ph}",
+                      (status, resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, dt_fim, d_id))
+        else:
+            c.execute(f"UPDATE demands SET status={ph}, assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph} WHERE id={ph}",
+                      (status, resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, d_id))
         conn.commit()
         flash("Informações do processo atualizadas com sucesso!", "success")
     except Exception as e:
@@ -1281,14 +2153,12 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
     total = t_rotina + t_avulsa
     
-    # Contagem agrupada por status nas duas tabelas
     c.execute("SELECT status, COUNT(*) FROM demands GROUP BY status")
     rot_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
     
     c.execute("SELECT status, COUNT(*) FROM demandas_avulsas GROUP BY status")
     av_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
     
-    # Lista completa de status (fixos + qualquer outro que exista no banco)
     todos_status = list(TODOS_STATUS_ORDEM)
     for st in list(rot_por_status.keys()) + list(av_por_status.keys()):
         if st not in todos_status:
@@ -1313,8 +2183,7 @@ def dashboard_graficos():
         qtd_r = rot_por_status.get(st, 0)
         qtd_a = av_por_status.get(st, 0)
         soma_st = qtd_r + qtd_a
-        # Exibe sempre os status principais ou qualquer status que tenha registro
-        if soma_st > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Finalizada', 'Concluído']:
+        if soma_st > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Concluído']:
             status_cards.append({
                 'nome': st,
                 'rotina': qtd_r,
@@ -1323,17 +2192,19 @@ def dashboard_graficos():
                 'cor': cores_status.get(st, '#004b87')
             })
     
-    # Ativas para o cálculo de SLA (Tudo o que não está fechado)
-    c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
+    # Filtra apenas as demandas abertas (exclui Finalizada, Concluído, Devolvido, Cancelada)
+    c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
     pendentes_rotina = c.fetchall()
-    c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
+    c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
     pendentes_avulsas = c.fetchall()
     
     todas_pendentes = pendentes_rotina + pendentes_avulsas
-    total_ativas = len(todas_pendentes)
+    total_ativas = 0
     sla_em_dia = 0; sla_atencao = 0; sla_urgente = 0; sla_critico = 0
     for p in todas_pendentes:
         s = calcular_sla(p[0], p[1])
+        if s < 0: continue
+        total_ativas += 1
         if s >= 6: sla_critico += 1
         elif s >= 4: sla_urgente += 1
         elif s >= 2: sla_atencao += 1
