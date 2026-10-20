@@ -24,6 +24,26 @@ def get_ph(conn):
     return "%s" if "psycopg2" in str(type(conn)) else "?"
 
 # ==========================================
+# AUTO-REPARADOR DE SEQUÊNCIAS (POSTGRESQL)
+# ==========================================
+def sincronizar_sequencias():
+    try:
+        conn = conectar_db()
+        if conn and "psycopg2" in str(type(conn)):
+            c = conn.cursor()
+            for tabela in ['demands', 'demandas_avulsas', 'users']:
+                try:
+                    c.execute(f"SELECT setval(pg_get_serial_sequence('{tabela}', 'id'), COALESCE((SELECT MAX(id) FROM {tabela}), 0) + 1, false);")
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+            conn.close()
+    except Exception as e:
+        print(f"Aviso ao sincronizar sequências: {e}")
+
+sincronizar_sequencias()
+
+# ==========================================
 # MOTOR DE CÁLCULO DE SLA
 # ==========================================
 def calcular_sla(data_str, status):
@@ -34,7 +54,7 @@ def calcular_sla(data_str, status):
         if not ds or ds.upper() in ['NONE', 'NAN', '']: return -1
         
         if '-' in ds:
-            dt = datetime.strptime(ds, "%Y-%m-%d")
+            dt = datetime.strptime(ds.split(' ')[0], "%Y-%m-%d")
         elif len(ds) > 10:
             dt = datetime.strptime(ds, "%d/%m/%Y %H:%M")
         else:
@@ -49,8 +69,25 @@ def calcular_sla(data_str, status):
 # LISTAS GLOBAIS E CONSTANTES
 # ==========================================
 TIPOS_ROTINA = ["Reajuste", "Novo Contrato", "Inclusão", "Exclusão", "Ajuste", "Extensão", "Descredenciamento", "Não Identificada"]
+STATUS_ROTINA = ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Cancelada']
+
 TIPOS_AVULSA = ['Credenciamento', 'Descredenciamento', 'Análise de Vulnerabilidade', 'Parametrização', 'Resposta de E-mail', 'RPS', 'Lote de Erros', 'Atendimento de Chamado', 'Atualização Cadastral', 'Outro']
-STATUS_AVULSA = ['Pendente', 'Recebida', 'Em Análise', 'Aguardando Retorno', 'Aguardando Área Demandante', 'Em andamento', 'Concluído', 'Cancelada']
+STATUS_AVULSA = ['Pendente', 'Recebida', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Aguardando Área Demandante', 'Em andamento', 'Concluído', 'Cancelada']
+
+TODOS_STATUS_ORDEM = [
+    'Pendente',
+    'Recebida',
+    'Em Análise',
+    'Em andamento',
+    'Aguardando 90 dias',
+    'Aguardando Retorno',
+    'Aguardando Área Demandante',
+    'Devolvido',
+    'Finalizada',
+    'Concluído',
+    'Cancelada'
+]
+
 SOLICITANTES = ['GEREL/COATE', 'GEREL/COCAD', 'UAR-AM', 'NAR-AC', 'NAR-RR', 'UAR-BA', 'NAR-AL', 'NAR-SE', 'UAR-CE', 'NAR-MA', 'NAR-PI', 'UAR-DF', 'NAR-GO', 'NAR-TO', 'UAR-MG', 'UAR-MS', 'NAR-MT', 'NAR-RO', 'UAR-PA', 'NAR-AP', 'UAR-PE', 'NAR-PB', 'NAR-RN', 'UAR-RJ', 'NAR-ES', 'UAR-RS', 'NAR-SC', 'UAR-SPI', 'UAR-SPM', 'NAR-PR', 'GEREM/COANS', 'GERIN', 'GEASA/COICS', 'GERED/COCAP']
 
 IGNORADAS = {"DIARIAS", "PACOTE", "TAXAS E GASES", "MATERIAIS E OPME", "MEDICAMENTOS", "FORNECEDOR DE MEDICAMENTO ONCOLOGICO", "INSTRUMENTADOR CIRURGICO", "HOME CARE - ATENDIMENTO DOMICILIAR", "REMOCAO", "MEDICINA LEGAL E PERICIA MEDICA", "MEDICO HIPERBARISTA"}
@@ -81,21 +118,39 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
 </nav>
 <div class="container mt-5 text-center">
     <h1 style="color: #004b87; font-weight: 800; margin-bottom: 2rem;">PORTAL CENTRAL DE OPERAÇÕES</h1>
-    <div class="row justify-content-center gap-4">
-        <div class="col-md-5">
+    <div class="row justify-content-center g-4">
+        <div class="col-md-4">
             <div class="card shadow-sm h-100 p-4 border-0">
                 <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controle de Demandas</h4><p class="text-muted mb-4">Gerencie Rotinas, PDFs, Avulsas e acesse o Dashboard.</p>
-                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2">Acessar Módulo</a>
+                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
             </div>
         </div>
-        <div class="col-md-5">
+        <div class="col-md-4">
             <div class="card shadow-sm h-100 p-4 border-0">
                 <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1><h4>Pente Fino (RN 665)</h4><p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
-                <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2">Acessar Módulo</a>
+                <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100 p-4 border-0">
+                <h1 class="text-success mb-3" style="font-size: 3rem;">📋</h1><h4>Credenciamento - Fases</h4><p class="text-muted mb-4">Acompanhamento diário de relatórios e fases de credenciamento.</p>
+                <a href="/credenciamento" class="btn btn-success text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
             </div>
         </div>
     </div>
-    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-5"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a></div></div>{% endif %}
+    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-6"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a></div></div>{% endif %}
+</div></body></html>"""
+
+TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Credenciamento - Fases</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body style="background-color: #f0f2f5;">
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Módulo: Credenciamento - Fases</span></div></nav>
+<div class="container mt-5 text-center">
+    <div class="card shadow-sm border-0 p-5 mx-auto" style="max-width: 650px;">
+        <h1 style="font-size: 4rem;">📋</h1>
+        <h3 class="fw-bold text-success mt-3">Credenciamento - Fases</h3>
+        <p class="text-muted">Estrutura pronta para receber o relatório diário de acompanhamento de fases.</p>
+        <a href="/dashboard" class="btn btn-outline-secondary fw-bold mt-3">⬅ Voltar ao Portal</a>
+    </div>
 </div></body></html>"""
 
 TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel Administrativo</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
@@ -221,7 +276,7 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
                     {% endif %}
                 </td>
                 <td>{{ d[1] }}</td><td class="text-start">{{ d[2] }}</td><td>{{ d[3] }}</td><td>{{ d[4] }}</td><td>{{ d[5] }}</td>
-                <td><span class="badge bg-{{ 'dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'info' }}">{{ d[6] }}</span></td>
+                <td><span class="badge bg-{{ 'dark' if d[6]=='Pendente' else 'success' if d[6] in ('Concluído', 'Finalizada') else 'warning text-dark' if d[6]=='Aguardando 90 dias' else 'info' }}">{{ d[6] }}</span></td>
                 <td>{{ d[7] }}</td><td>{{ d[8] }}</td>
                 <td>
                     <form method="POST" action="/demandas/avulsas" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
@@ -263,7 +318,7 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
                 <select name="solicitante" id="edit_av_sol" class="form-select">{% for s in sols %}<option value="{{s}}">{{s}}</option>{% endfor %}</select>
             </div>
             <div class="col-md-4"><label class="form-label fw-bold">Responsável</label>
-                <select name="responsavel" id="edit_av_resp" class="form-select">{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
+                <select name="responsavel" id="edit_av_resp" class="form-select">{% for u in usuarios if u != 'Todos' %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
             </div>
             <div class="col-md-4"><label class="form-label fw-bold">Prazo</label>
                 <input type="date" name="prazo" id="edit_av_prazo" class="form-control">
@@ -312,7 +367,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     <div class="card shadow-sm mb-3 border-0 bg-light">
         <div class="card-body py-2">
             <form method="GET" action="/demandas/rotinas" class="row g-2 align-items-center">
-                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option><option value="Pendente" {% if atual_status == 'Pendente' %}selected{% endif %}>Pendente</option><option value="Em Análise" {% if atual_status == 'Em Análise' %}selected{% endif %}>Em Análise</option><option value="Finalizada" {% if atual_status == 'Finalizada' %}selected{% endif %}>Finalizada</option></select></div>
+                <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="Todos">Status (Todos)</option>{% for s in status_list %}<option value="{{s}}" {% if atual_status == s %}selected{% endif %}>{{s}}</option>{% endfor %}</select></div>
                 <div class="col-md-3"><select name="tipo" class="form-select form-select-sm"><option value="Todos">Tipo (Todos)</option>{% for t in tipos %}<option value="{{t}}" {% if t == atual_tipo %}selected{% endif %}>{{t}}</option>{% endfor %}</select></div>
                 <div class="col-md-3"><select name="resp" class="form-select form-select-sm"><option value="Todos">Responsável (Todos)</option>{% for u in usuarios %}<option value="{{u}}" {% if u == atual_resp %}selected{% endif %}>{{u}}</option>{% endfor %}</select></div>
                 <div class="col-md-3"><button type="submit" class="btn btn-secondary btn-sm w-100 fw-bold">🔍 Filtrar Resultados</button></div>
@@ -364,7 +419,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                     {% endif %}
                 </td>
                 <td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
-                <td><span class="badge bg-{{ 'dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'info' }}">{{ d[3] }}</span></td>
+                <td><span class="badge bg-{{ 'dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'warning text-dark' if d[3]=='Aguardando 90 dias' else 'danger' if d[3]=='Devolvido' else 'info' }}">{{ d[3] }}</span></td>
                 <td>{{ d[4] }}</td>
                 <td>
                     <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
@@ -372,7 +427,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                         <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] == 'Finalizada' %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
                     <button id="btn-edit-rot-{{d[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Informações"
-                        data-id="{{ d[0] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
+                        data-id="{{ d[0] }}" data-status="{{ d[3] }}" data-tipo="{{ d[11] if d[11] else '' }}" data-alcada="{{ d[12] if d[12] else '' }}" 
                         data-perc="{{ d[13] if d[13] else '' }}" data-rs="{{ d[14] if d[14] else '' }}" data-nup="{{ d[15] if d[15] else '' }}"
                         data-proc="{{ d[16] if d[16] else '' }}" data-fop="{{ d[17] if d[17] else '' }}" 
                         data-fop-date="{{ d[18] if d[18] else '' }}" data-obs="{{ d[22] if d[22] else '' }}"
@@ -396,14 +451,17 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
       <div class="modal-body">
         <input type="hidden" name="id" id="edit_rot_id">
         <div class="row g-3">
-            <div class="col-md-4"><label class="form-label fw-bold text-primary">Responsável Atual</label>
-                <select name="responsavel" id="edit_rot_resp" class="form-select border-primary">{% for u in usuarios %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
+            <div class="col-md-4"><label class="form-label fw-bold text-primary">Status da Demanda</label>
+                <select name="status" id="edit_rot_status" class="form-select border-primary">{% for s in status_list %}<option value="{{s}}">{{s}}</option>{% endfor %}</select>
             </div>
-            <div class="col-md-4"><label class="form-label fw-bold">NUP / e-Doc</label>
-                <input type="text" name="nup_edoc" id="edit_rot_nup" class="form-control">
+            <div class="col-md-4"><label class="form-label fw-bold text-primary">Responsável Atual</label>
+                <select name="responsavel" id="edit_rot_resp" class="form-select border-primary">{% for u in usuarios if u != 'Todos' %}<option value="{{u}}">{{u}}</option>{% endfor %}</select>
             </div>
             <div class="col-md-4"><label class="form-label fw-bold text-danger">Data Assin. FOP (SLA Geral)</label>
                 <input type="date" name="data_aprovacao" id="edit_rot_data_fop" class="form-control border-danger">
+            </div>
+            <div class="col-md-4"><label class="form-label fw-bold">NUP / e-Doc</label>
+                <input type="text" name="nup_edoc" id="edit_rot_nup" class="form-control">
             </div>
             <div class="col-md-4"><label class="form-label fw-bold">Tipo Negociação</label>
                 <select name="tipo_negociacao" id="edit_rot_tipo" class="form-select">
@@ -417,16 +475,16 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             </div>
             <div class="col-md-4"><label class="form-label fw-bold">Tipo Processo</label>
                 <select name="tipo_processo" id="edit_rot_proc" class="form-select">
-                    <option value="">Selecione...</option><option value="PARAMETRIZADO">PARAMETRIZADO</option><option value="AGUARDANDO RETORNO">AGUARDANDO RETORNO</option><option value="DEVOLVIDO">DEVOLVIDO</option><option value="NÃO LOCALIZADO">NÃO LOCALIZADO</option>
+                    <option value="">Selecione...</option><option value="PARAMETRIZADO">PARAMETRIZADO</option><option value="AGUARDANDO 90 DIAS">AGUARDANDO 90 DIAS</option><option value="AGUARDANDO RETORNO">AGUARDANDO RETORNO</option><option value="DEVOLVIDO">DEVOLVIDO</option><option value="NÃO LOCALIZADO">NÃO LOCALIZADO</option>
                 </select>
             </div>
             <div class="col-md-4"><label class="form-label fw-bold">FOP Autorização (Nº)</label>
                 <input type="text" name="fop_autorizacao" id="edit_rot_fop" class="form-control">
             </div>
-            <div class="col-md-4"><label class="form-label fw-bold">Impacto (%)</label>
+            <div class="col-md-2"><label class="form-label fw-bold">Impacto (%)</label>
                 <input type="text" name="impacto_perc" id="edit_rot_perc" class="form-control" placeholder="Ex: 5,4%">
             </div>
-            <div class="col-md-4"><label class="form-label fw-bold">Impacto (R$)</label>
+            <div class="col-md-2"><label class="form-label fw-bold">Impacto (R$)</label>
                 <input type="text" name="impacto_rs" id="edit_rot_rs" class="form-control" placeholder="Ex: 15000,00">
             </div>
             <div class="col-md-12"><label class="form-label fw-bold">Observações</label>
@@ -446,6 +504,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
 <script>
 function abrirModalRotina(btn) {
     document.getElementById('edit_rot_id').value = btn.getAttribute('data-id');
+    document.getElementById('edit_rot_status').value = btn.getAttribute('data-status') || 'Pendente';
     document.getElementById('edit_rot_tipo').value = btn.getAttribute('data-tipo');
     document.getElementById('edit_rot_alcada').value = btn.getAttribute('data-alcada');
     document.getElementById('edit_rot_perc').value = btn.getAttribute('data-perc');
@@ -471,18 +530,52 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Dashboard Geral</span></div></nav>
 <div class="container mt-4">
-    <div class="row text-center mb-2">
-        <div class="col-md-3"><div class="card shadow-sm border-0 bg-primary text-white p-3"><h5 class="mb-1">Total Demandas</h5><h2 class="fw-bold">{{ d_total }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 bg-warning text-dark p-3"><h5 class="mb-1">Pendentes (Novas)</h5><h2 class="fw-bold">{{ d_pend }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 bg-info text-white p-3"><h5 class="mb-1">Em Análise</h5><h2 class="fw-bold">{{ d_ana }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 bg-success text-white p-3"><h5 class="mb-1">Concluídas</h5><h2 class="fw-bold">{{ d_conc }}</h2></div></div>
+    <!-- Resumo Geral -->
+    <div class="row text-center mb-4 g-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 bg-primary text-white p-3 h-100">
+                <h5 class="mb-1">Total Geral de Demandas</h5>
+                <h1 class="fw-bold mb-0">{{ d_total }}</h1>
+                <small class="text-light opacity-75">Soma de todos os status</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 bg-dark text-white p-3 h-100">
+                <h5 class="mb-1">Total Rotinas (PDFs)</h5>
+                <h1 class="fw-bold mb-0">{{ t_rotina }}</h1>
+                <small class="text-light opacity-75">Processos via Upload PDF</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 bg-secondary text-white p-3 h-100">
+                <h5 class="mb-1">Total Demandas Avulsas</h5>
+                <h1 class="fw-bold mb-0">{{ t_avulsa }}</h1>
+                <small class="text-light opacity-75">Registros manuais</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contagem Detalhada de TODOS os Status -->
+    <h5 class="mb-3 text-secondary fw-bold">📊 Contagem Completa por Status (100% da Base)</h5>
+    <div class="row text-center g-3 mb-4">
+        {% for item in status_cards %}
+        <div class="col-md-3 col-sm-6">
+            <div class="card shadow-sm border-0 h-100 p-3" style="border-left: 5px solid {{ item.cor }} !important;">
+                <h6 class="text-secondary fw-bold mb-1">{{ item.nome }}</h6>
+                <h2 class="fw-bold mb-1" style="color: {{ item.cor }};">{{ item.total }}</h2>
+                <small class="text-muted">PDFs: <strong>{{ item.rotina }}</strong> | Avulsas: <strong>{{ item.avulsa }}</strong></small>
+            </div>
+        </div>
+        {% endfor %}
     </div>
     
-    <h5 class="mb-0 text-secondary fw-bold mt-4">Monitoramento de SLA COCAP (Demandas Ativas: {{ total_ativas }})</h5>
-    <div class="row text-center mt-3 mb-4">
-        <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h5 class="mb-1">Atenção (2 a 3 dias)</h5><h2 class="fw-bold">{{ sla_atencao }}</h2></div></div>
-        <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h5 class="mb-1">Urgente (4 a 5 dias)</h5><h2 class="fw-bold">{{ sla_urgente }}</h2></div></div>
-        <div class="col-md-4"><div class="card shadow-sm border-0 p-3" style="background-color: #f8d7da; color: #721c24;"><h5 class="mb-1">Crítico (6+ dias)</h5><h2 class="fw-bold">{{ sla_critico }}</h2></div></div>
+    <!-- SLA COCAP -->
+    <h5 class="mb-0 text-secondary fw-bold mt-4">⏱️ Monitoramento de SLA COCAP (Demandas em Aberto: {{ total_ativas }})</h5>
+    <div class="row text-center mt-3 mb-4 g-3">
+        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #e2e3e5; color: #383d41;"><h6 class="mb-1 fw-bold">No Prazo (0 a 1 dia)</h6><h2 class="fw-bold mb-0">{{ sla_em_dia }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h6 class="mb-1 fw-bold">Atenção (2 a 3 dias)</h6><h2 class="fw-bold mb-0">{{ sla_atencao }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h6 class="mb-1 fw-bold">Urgente (4 a 5 dias)</h6><h2 class="fw-bold mb-0">{{ sla_urgente }}</h2></div></div>
+        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #f8d7da; color: #721c24;"><h6 class="mb-1 fw-bold">Crítico (6+ dias)</h6><h2 class="fw-bold mb-0">{{ sla_critico }}</h2></div></div>
     </div>
 
     <div class="row">
@@ -505,9 +598,7 @@ TELA_HUB_PENTEFINO = """<!DOCTYPE html><html lang="pt-BR"><head><title>Pente Fin
     </div>
 </div></body></html>"""
 
-# TELA REGIONAL COM SHEETJS VOLTANDO! 
-TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>
+TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruzamento Regional</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/pentefino" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Cruzamento Regional (Em Massa)</span></div></nav>
 <div class="container mt-4">
@@ -577,7 +668,6 @@ function lerCabecalho(input, selectId1, selectId2) {
 }
 </script>
 </body></html>"""
-
 
 TELA_PENTEFINO_INDIVIDUAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Busca Sniper Individual</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
@@ -913,6 +1003,11 @@ def dashboard():
     if 'user' not in session: return redirect(url_for('login'))
     return render_template_string(TELA_DASHBOARD, user=session['user'], role=session['role'])
 
+@app.route('/credenciamento')
+def credenciamento_fases():
+    if 'user' not in session: return redirect(url_for('login'))
+    return render_template_string(TELA_CREDENCIAMENTO_FASES)
+
 @app.route('/logout')
 def logout():
     session.clear()
@@ -927,6 +1022,7 @@ def admin():
         if acao == 'adicionar':
             u = request.form.get('username'); p = request.form.get('password'); r = request.form.get('role')
             try:
+                sincronizar_sequencias()
                 c.execute(f"INSERT INTO users (username, password, role, first_login) VALUES ({ph}, {ph}, {ph}, 1)", (u, p, r))
                 conn.commit(); flash(f"Usuário '{u}' criado com sucesso!", "success")
             except Exception: conn.rollback(); flash("Erro: Nome de usuário já existe!", "danger")
@@ -986,8 +1082,10 @@ def importar_backup():
                         c.execute(f"DELETE FROM {tabela}"); c.executemany(f"INSERT INTO {tabela} ({cols}) VALUES ({placeholders})", rows)
                 except Exception: pass
             sqlite_conn.close(); os.remove(temp_db)
-        conn.commit(); conn.close(); session.clear()
-        flash("Base de Dados importada com sucesso! Inicie sessão novamente.", "success")
+        conn.commit(); conn.close()
+        sincronizar_sequencias()
+        session.clear()
+        flash("Base de Dados importada e sincronizada com sucesso! Inicie sessão novamente.", "success")
         return redirect(url_for('login'))
     except Exception as e: flash(f"Falha ao restaurar banco. Erro: {e}", "danger"); return redirect(url_for('admin'))
 
@@ -1002,15 +1100,22 @@ def demandas_avulsas():
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
     if request.method == 'POST':
         acao = request.form.get('acao')
-        if acao == 'nova':
-            td = request.form.get('tipo'); assunto = request.form.get('assunto')
-            sol = request.form.get('solicitante'); prazo = request.form.get('prazo')
-            dt_ent = datetime.now().strftime("%d/%m/%Y %H:%M")
-            c.execute(f"INSERT INTO demandas_avulsas (tipo_demanda, assunto, solicitante, data_entrada, prazo, status, responsavel, observacao) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Pendente', 'Nenhum', '')", (td, assunto, sol, dt_ent, prazo))
-            flash("Demanda Avulsa criada com sucesso!", "success")
-        elif acao == 'assumir': c.execute(f"UPDATE demandas_avulsas SET status='Em Análise', responsavel={ph} WHERE id={ph}", (session['user'], request.form.get('id')))
-        elif acao == 'concluir': c.execute(f"UPDATE demandas_avulsas SET status='Concluído', data_conclusao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y"), request.form.get('id')))
-        conn.commit()
+        try:
+            if acao == 'nova':
+                sincronizar_sequencias()
+                td = request.form.get('tipo'); assunto = request.form.get('assunto')
+                sol = request.form.get('solicitante'); prazo = request.form.get('prazo')
+                dt_ent = datetime.now().strftime("%d/%m/%Y %H:%M")
+                c.execute(f"INSERT INTO demandas_avulsas (tipo_demanda, assunto, solicitante, data_entrada, prazo, status, responsavel, observacao) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Pendente', 'Nenhum', '')", (td, assunto, sol, dt_ent, prazo))
+                flash("Demanda Avulsa criada com sucesso!", "success")
+            elif acao == 'assumir':
+                c.execute(f"UPDATE demandas_avulsas SET status='Em Análise', responsavel={ph} WHERE id={ph}", (session['user'], request.form.get('id')))
+            elif acao == 'concluir':
+                c.execute(f"UPDATE demandas_avulsas SET status='Concluído', data_conclusao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y"), request.form.get('id')))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            flash(f"Erro ao processar ação na Demanda Avulsa: {e}", "danger")
 
     s_filtro = request.args.get('status', 'Todos'); t_filtro = request.args.get('tipo', 'Todos'); r_filtro = request.args.get('resp', 'Todos')
     q = "SELECT * FROM demandas_avulsas WHERE 1=1"; p = []
@@ -1029,9 +1134,16 @@ def editar_avulsa():
     resp = request.form.get('responsavel'); obs = request.form.get('observacao')
 
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph} WHERE id={ph}",
-              (tipo, assunto, solicitante, prazo, status, resp, obs, d_id))
-    conn.commit(); conn.close(); flash("Demanda Avulsa atualizada com sucesso!", "success")
+    try:
+        c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph} WHERE id={ph}",
+                  (tipo, assunto, solicitante, prazo, status, resp, obs, d_id))
+        conn.commit()
+        flash("Demanda Avulsa atualizada com sucesso!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Erro ao editar demanda: {e}", "danger")
+    finally:
+        conn.close()
     return redirect(url_for('demandas_avulsas'))
 
 @app.route('/demandas/rotinas')
@@ -1045,84 +1157,120 @@ def demandas_rotinas():
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
     c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla)
+    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, status_list=STATUS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
 def upload_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
     arquivos = request.files.getlist('pdfs')
-    if not arquivos or arquivos[0].filename == '': flash("Nenhum arquivo selecionado.", "warning"); return redirect(url_for('demandas_rotinas'))
-    kw = {"REAJUSTE": "Reajuste", "NOVO CONTRATO": "Novo Contrato", "INCLUSÃO": "Inclusão", "EXCLUSÃO": "Exclusão", "AJUSTE": "Ajuste", "EXTENSÃO": "Extensão", "DESCREDENCIAMENTO": "Descredenciamento"}
+    if not arquivos or arquivos[0].filename == '':
+        flash("Nenhum arquivo selecionado.", "warning")
+        return redirect(url_for('demandas_rotinas'))
+        
+    sincronizar_sequencias()
+    kw = {"REAJUSTE": "Reajuste", "NOVO CONTRATO": "Novo Contrato", "INCLUSÃO": "Inclusão", "INCLUSAO": "Inclusão", "EXCLUSÃO": "Exclusão", "EXCLUSAO": "Exclusão", "AJUSTE": "Ajuste", "EXTENSÃO": "Extensão", "EXTENSAO": "Extensão", "DESCREDENCIAMENTO": "Descredenciamento"}
     valid_ufs = {'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'}
-    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn); count = 0
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    count = 0; ignorados = 0
+    
     for file in arquivos:
-        f_name = file.filename
-        c.execute(f"SELECT id FROM demands WHERE filename={ph}", (f_name,))
-        if c.fetchone(): continue
-        fu = f_name.upper(); dem = "Não Identificada"
-        for k, v in kw.items():
-            if k in fu: dem = v; break
-        f_clean = re.sub(r'\.pdf$', '', fu, flags=re.IGNORECASE)
-        docs_brutos = re.findall(r'\d{2}[.\s_-]*\d{3}[.\s_-]*\d{3}[.\s/-]*\d{4}[-\s_]*\d{2}|\d{3}[.\s_-]*\d{3}[.\s_-]*\d{3}[-\s_]*\d{2}|\b\d{14}\b|\b\d{11}\b', f_clean)
-        cnpj_p = "Não encontrado"
-        for c_ in docs_brutos:
-            cn = re.sub(r'\D', '', c_)
-            if len(cn) == 14: cnpj_p = f"{cn[:2]}.{cn[2:5]}.{cn[5:8]}/{cn[8:12]}-{cn[12:]}"; f_clean = f_clean.replace(c_, ''); break
-            elif len(cn) == 11: cnpj_p = f"{cn[:3]}.{cn[3:6]}.{cn[6:9]}-{cn[9:]}"; f_clean = f_clean.replace(c_, ''); break
-        mun, uf, prest = "-", "-", "Não encontrado"
-        for k in kw.keys(): f_clean = re.sub(k, '', f_clean, flags=re.IGNORECASE)
-        parts = [p.strip() for p in f_clean.split('-') if p.strip()]
-        if len(parts) >= 2:
-            p1 = parts[-1].upper(); p2 = parts[-2].upper() if len(parts) > 1 else ""
-            if p1 in valid_ufs: uf = p1; mun = p2 if len(parts) >= 3 else "-"; prest = " ".join(parts[:-2]).strip() if len(parts) >= 3 else p2
-            elif p2 in valid_ufs: uf = p2; mun = p1; prest = " ".join(parts[:-2]).strip()
-            else:
-                m_uf_end = re.search(r'\b([A-Z]{2})\b$', p1)
-                if m_uf_end and m_uf_end.group(1) in valid_ufs: uf = m_uf_end.group(1); mun = re.sub(r'\b' + uf + r'\b$', '', p1).strip(); prest = " ".join(parts[:-1]).strip()
-                else: prest = " ".join(parts).strip()
-        elif len(parts) == 1:
-            m_uf_end = re.search(r'\b([A-Z]{2})\b$', parts[0].upper())
-            if m_uf_end and m_uf_end.group(1) in valid_ufs: uf = m_uf_end.group(1); prest = re.sub(r'\b' + uf + r'\b$', '', parts[0]).strip()
-            else: prest = parts[0]
-        prest = re.sub(r'^[-_\s]+|[-_\s]+$', '', prest); prest = re.sub(r'\s+', ' ', prest).strip()
-        if not prest or len(prest) <= 3: prest = "Não encontrado"
-        if prest == "Não encontrado" or uf == "-" or cnpj_p == "Não encontrado":
-            try:
-                reader = PyPDF2.PdfReader(file.stream); full_txt = ""
-                for page in reader.pages: full_txt += (page.extract_text() or "") + " "
-                if cnpj_p == "Não encontrado":
-                    docs_text = re.findall(r'\d{2}[.\s]*\d{3}[.\s]*\d{3}[/\s]*\d{4}[-\s]*\d{2}|\b\d{14}\b', full_txt)
-                    for c_ in docs_text:
-                        cn = re.sub(r'\D', '', c_)
-                        if len(cn) == 14: cnpj_p = f"{cn[:2]}.{cn[2:5]}.{cn[5:8]}/{cn[8:12]}-{cn[12:]}"; break
-            except: pass
-        c.execute(f"INSERT INTO demands (filename, filepath, type, status, assigned_to, prestador, cnpj, municipio, uf, data_entrada) VALUES ({ph}, 'WEB_UPLOAD', {ph}, 'Pendente', 'Nenhum', {ph}, {ph}, {ph}, {ph}, {ph})", 
-                     (f_name, dem, prest, cnpj_p, mun, uf, datetime.now().strftime("%d/%m/%Y %H:%M")))
-        count += 1
-    conn.commit(); conn.close(); flash(f"{count} PDFs processados com sucesso!", "success")
+        try:
+            f_name = file.filename
+            c.execute(f"SELECT id FROM demands WHERE filename={ph}", (f_name,))
+            if c.fetchone():
+                ignorados += 1
+                continue
+            
+            fu = f_name.upper(); dem = "Não Identificada"
+            for k, v in kw.items():
+                if k in fu: dem = v; break
+            f_clean = re.sub(r'\.pdf$', '', fu, flags=re.IGNORECASE)
+            docs_brutos = re.findall(r'\d{2}[.\s_-]*\d{3}[.\s_-]*\d{3}[.\s/-]*\d{4}[-\s_]*\d{2}|\d{3}[.\s_-]*\d{3}[.\s_-]*\d{3}[-\s_]*\d{2}|\b\d{14}\b|\b\d{11}\b', f_clean)
+            cnpj_p = "Não encontrado"
+            for c_ in docs_brutos:
+                cn = re.sub(r'\D', '', c_)
+                if len(cn) == 14: cnpj_p = f"{cn[:2]}.{cn[2:5]}.{cn[5:8]}/{cn[8:12]}-{cn[12:]}"; f_clean = f_clean.replace(c_, ''); break
+                elif len(cn) == 11: cnpj_p = f"{cn[:3]}.{cn[3:6]}.{cn[6:9]}-{cn[9:]}"; f_clean = f_clean.replace(c_, ''); break
+            mun, uf, prest = "-", "-", "Não encontrado"
+            for k in kw.keys(): f_clean = re.sub(k, '', f_clean, flags=re.IGNORECASE)
+            parts = [p.strip() for p in f_clean.split('-') if p.strip()]
+            if len(parts) >= 2:
+                p1 = parts[-1].upper(); p2 = parts[-2].upper() if len(parts) > 1 else ""
+                if p1 in valid_ufs: uf = p1; mun = p2 if len(parts) >= 3 else "-"; prest = " ".join(parts[:-2]).strip() if len(parts) >= 3 else p2
+                elif p2 in valid_ufs: uf = p2; mun = p1; prest = " ".join(parts[:-2]).strip()
+                else:
+                    m_uf_end = re.search(r'\b([A-Z]{2})\b$', p1)
+                    if m_uf_end and m_uf_end.group(1) in valid_ufs: uf = m_uf_end.group(1); mun = re.sub(r'\b' + uf + r'\b$', '', p1).strip(); prest = " ".join(parts[:-1]).strip()
+                    else: prest = " ".join(parts).strip()
+            elif len(parts) == 1:
+                m_uf_end = re.search(r'\b([A-Z]{2})\b$', parts[0].upper())
+                if m_uf_end and m_uf_end.group(1) in valid_ufs: uf = m_uf_end.group(1); prest = re.sub(r'\b' + uf + r'\b$', '', parts[0]).strip()
+                else: prest = parts[0]
+            prest = re.sub(r'^[-_\s]+|[-_\s]+$', '', prest); prest = re.sub(r'\s+', ' ', prest).strip()
+            if not prest or len(prest) <= 3: prest = "Não encontrado"
+            
+            if prest == "Não encontrado" or uf == "-" or cnpj_p == "Não encontrado":
+                try:
+                    pdf_bytes = BytesIO(file.read())
+                    reader = PyPDF2.PdfReader(pdf_bytes); full_txt = ""
+                    for page in reader.pages: full_txt += (page.extract_text() or "") + " "
+                    if cnpj_p == "Não encontrado":
+                        docs_text = re.findall(r'\d{2}[.\s]*\d{3}[.\s]*\d{3}[/\s]*\d{4}[-\s]*\d{2}|\b\d{14}\b', full_txt)
+                        for c_ in docs_text:
+                            cn = re.sub(r'\D', '', c_)
+                            if len(cn) == 14: cnpj_p = f"{cn[:2]}.{cn[2:5]}.{cn[5:8]}/{cn[8:12]}-{cn[12:]}"; break
+                except Exception:
+                    pass
+                    
+            c.execute(f"INSERT INTO demands (filename, filepath, type, status, assigned_to, prestador, cnpj, municipio, uf, data_entrada) VALUES ({ph}, 'WEB_UPLOAD', {ph}, 'Pendente', 'Nenhum', {ph}, {ph}, {ph}, {ph}, {ph})", 
+                         (f_name, dem, prest, cnpj_p, mun, uf, datetime.now().strftime("%d/%m/%Y %H:%M")))
+            conn.commit()
+            count += 1
+        except Exception as e:
+            conn.rollback()
+            flash(f"Erro ao importar '{file.filename}': {e}", "danger")
+            
+    conn.close()
+    msg = f"{count} PDF(s) processado(s) com sucesso!"
+    if ignorados > 0: msg += f" ({ignorados} já existiam na base e foram ignorados)."
+    flash(msg, "success" if count > 0 else "warning")
     return redirect(url_for('demandas_rotinas'))
 
 @app.route('/demandas/rotinas/acao', methods=['POST'])
 def acao_rotinas():
     d_id = request.form.get('id'); acao = request.form.get('acao')
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    if acao == 'assumir': c.execute(f"UPDATE demands SET status='Em Análise', assigned_to={ph} WHERE id={ph}", (session['user'], d_id))
-    elif acao == 'finalizar': c.execute(f"UPDATE demands SET status='Finalizada', data_finalizacao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y %H:%M"), d_id))
-    conn.commit(); conn.close()
+    try:
+        if acao == 'assumir': c.execute(f"UPDATE demands SET status='Em Análise', assigned_to={ph} WHERE id={ph}", (session['user'], d_id))
+        elif acao == 'finalizar': c.execute(f"UPDATE demands SET status='Finalizada', data_finalizacao={ph} WHERE id={ph}", (datetime.now().strftime("%d/%m/%Y %H:%M"), d_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        flash(f"Erro ao atualizar rotina: {e}", "danger")
+    finally:
+        conn.close()
     return redirect(url_for('demandas_rotinas'))
 
 @app.route('/demandas/rotinas/editar', methods=['POST'])
 def editar_rotina():
     if 'user' not in session: return redirect(url_for('login'))
-    d_id = request.form.get('id'); tipo_neg = request.form.get('tipo_negociacao'); alcada = request.form.get('alcada')
+    d_id = request.form.get('id'); status = request.form.get('status')
+    tipo_neg = request.form.get('tipo_negociacao'); alcada = request.form.get('alcada')
     perc = request.form.get('impacto_perc'); rs = request.form.get('impacto_rs'); nup = request.form.get('nup_edoc')
     proc = request.form.get('tipo_processo'); fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
     resp = request.form.get('responsavel'); data_fop = request.form.get('data_aprovacao')
 
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    c.execute(f"UPDATE demands SET assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph} WHERE id={ph}",
-              (resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, d_id))
-    conn.commit(); conn.close(); flash("Informações do processo atualizadas com sucesso!", "success")
+    try:
+        c.execute(f"UPDATE demands SET status={ph}, assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph} WHERE id={ph}",
+                  (status, resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, d_id))
+        conn.commit()
+        flash("Informações do processo atualizadas com sucesso!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Erro ao salvar informações: {e}", "danger")
+    finally:
+        conn.close()
     return redirect(url_for('demandas_rotinas'))
 
 @app.route('/demandas/dashboard_graficos')
@@ -1133,20 +1281,47 @@ def dashboard_graficos():
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
     total = t_rotina + t_avulsa
     
-    # Pendentes puros (Demandas novas)
-    c.execute("SELECT COUNT(*) FROM demands WHERE status='Pendente'"); p_rot_pure = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Pendente'"); p_av_pure = c.fetchone()[0]
-    pend_puro = p_rot_pure + p_av_pure
+    # Contagem agrupada por status nas duas tabelas
+    c.execute("SELECT status, COUNT(*) FROM demands GROUP BY status")
+    rot_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
     
-    # Em Análise
-    c.execute("SELECT COUNT(*) FROM demands WHERE status='Em Análise'"); a_rot = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status='Em Análise'"); a_av = c.fetchone()[0]
-    em_ana = a_rot + a_av
+    c.execute("SELECT status, COUNT(*) FROM demandas_avulsas GROUP BY status")
+    av_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
     
-    # Concluídas
-    c.execute("SELECT COUNT(*) FROM demands WHERE status IN ('Finalizada', 'Concluído', 'Cancelada')"); c_rot = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas WHERE status IN ('Finalizada', 'Concluído', 'Cancelada')"); c_av = c.fetchone()[0]
-    conc = c_rot + c_av
+    # Lista completa de status (fixos + qualquer outro que exista no banco)
+    todos_status = list(TODOS_STATUS_ORDEM)
+    for st in list(rot_por_status.keys()) + list(av_por_status.keys()):
+        if st not in todos_status:
+            todos_status.append(st)
+            
+    cores_status = {
+        'Pendente': '#f0ad4e',
+        'Recebida': '#5bc0de',
+        'Em Análise': '#0275d8',
+        'Em andamento': '#0dcaf0',
+        'Aguardando 90 dias': '#6f42c1',
+        'Aguardando Retorno': '#fd7e14',
+        'Aguardando Área Demandante': '#d63384',
+        'Devolvido': '#dc3545',
+        'Finalizada': '#198754',
+        'Concluído': '#20c997',
+        'Cancelada': '#6c757d'
+    }
+    
+    status_cards = []
+    for st in todos_status:
+        qtd_r = rot_por_status.get(st, 0)
+        qtd_a = av_por_status.get(st, 0)
+        soma_st = qtd_r + qtd_a
+        # Exibe sempre os status principais ou qualquer status que tenha registro
+        if soma_st > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Finalizada', 'Concluído']:
+            status_cards.append({
+                'nome': st,
+                'rotina': qtd_r,
+                'avulsa': qtd_a,
+                'total': soma_st,
+                'cor': cores_status.get(st, '#004b87')
+            })
     
     # Ativas para o cálculo de SLA (Tudo o que não está fechado)
     c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Cancelada')")
@@ -1156,12 +1331,13 @@ def dashboard_graficos():
     
     todas_pendentes = pendentes_rotina + pendentes_avulsas
     total_ativas = len(todas_pendentes)
-    sla_atencao = 0; sla_urgente = 0; sla_critico = 0
+    sla_em_dia = 0; sla_atencao = 0; sla_urgente = 0; sla_critico = 0
     for p in todas_pendentes:
         s = calcular_sla(p[0], p[1])
         if s >= 6: sla_critico += 1
         elif s >= 4: sla_urgente += 1
         elif s >= 2: sla_atencao += 1
+        else: sla_em_dia += 1
 
     fig1, ax1 = plt.subplots(figsize=(6,4))
     c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to")
@@ -1181,7 +1357,7 @@ def dashboard_graficos():
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
-    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, d_pend=pend_puro, d_ana=em_ana, d_conc=conc, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico, total_ativas=total_ativas)
+    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, t_rotina=t_rotina, t_avulsa=t_avulsa, status_cards=status_cards, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_em_dia=sla_em_dia, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico, total_ativas=total_ativas)
 
 @app.route('/pentefino')
 def hub_pentefino():
@@ -1384,9 +1560,12 @@ def pentefino_individual():
             if not regiao_cand: regiao_cand = map_geo_regiao.get(chave_geo_cand, "NÃO ENCONTRADA")
             
             prox_str = ""; ordem_prox = 2
-            if mun_cand == mun_alvo and uf_cand == uf_alvo: prox_str = "1 - Mesmo Município"; ordem_prox = 0
-            elif regiao_cand == regiao_alvo and regiao_alvo and regiao_alvo != "NÃO ENCONTRADA": prox_str = "2 - Mesma Região de Saúde"; ordem_prox = 1
-            else: continue
+            if normalizar_texto(mun_cand) == normalizar_texto(mun_alvo) and normalizar_texto(uf_cand) == normalizar_texto(uf_alvo):
+                prox_str = "1 - Mesmo Município"; ordem_prox = 0
+            elif regiao_cand == regiao_alvo and regiao_alvo and regiao_alvo != "NÃO ENCONTRADA":
+                prox_str = "2 - Mesma Região de Saúde"; ordem_prox = 1
+            else:
+                continue
             
             tipo_cand = str(row.get(col_tipo_ind, '')).strip().upper() if col_tipo_ind else "-"
             if filtro_tipo == "MESMO TIPO DO ALVO" and tipo_cand != tipo_alvo: continue
@@ -1406,7 +1585,6 @@ def pentefino_individual():
             else: status_cob = f"Vulnerabilidade: Faltam {len(faltante)}"; txt_faltante = "\n".join([f"• {f}" for f in sorted(faltante)])
             resultados.append((ordem_prox, len(faltante), prox_str, cnpj_cand, nome_cand, tipo_cand, f"{mun_cand}/{uf_cand}", status_cob, txt_faltante))
             
-        # Ordena a lista para o Excel e HTML: Primeiro os do Município, depois os da Região, e dentro disso os mais completos
         resultados.sort(key=lambda x: (x[0], x[1], x[4])) 
         
         faltante_mun = esp_alvo_set - piscina_mun
@@ -1459,7 +1637,6 @@ def pentefino_individual():
 
         wb.save(output); output.seek(0)
         
-        # Filtra e separa os dados para o HTML Renderizar as 4 Tabelas Exatas
         res_100_mun = [r for r in resultados if r[1] == 0 and r[0] == 0]
         res_100_reg = [r for r in resultados if r[1] == 0 and r[0] == 1]
         res_vul_mun = [r for r in resultados if r[1] > 0 and r[0] == 0]
