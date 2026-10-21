@@ -111,10 +111,6 @@ def parse_data_br(data_str):
         return None
 
 def calcular_sla(data_str, status, data_fim=None):
-    """
-    Retorna os dias em aberto APENAS para demandas ativas.
-    Se o status for Finalizada, Concluído, Devolvido ou Cancelada, retorna -1 (para a contagem de alerta).
-    """
     st_upper = str(status or '').strip().upper()
     if not data_str or st_upper in STATUS_ENCERRADOS_DEMANDAS:
         return -1 
@@ -124,9 +120,6 @@ def calcular_sla(data_str, status, data_fim=None):
     return dias if dias >= 0 else 0
 
 def calcular_dias_fechados(data_ini_str, data_fim_str):
-    """
-    Calcula quantos dias a demanda levou até ser Finalizada ou Devolvida (SLA congelado).
-    """
     dt_ini = parse_data_br(data_ini_str)
     dt_fim = parse_data_br(data_fim_str)
     if dt_ini and dt_fim:
@@ -135,11 +128,6 @@ def calcular_dias_fechados(data_ini_str, data_fim_str):
     return None
 
 def calcular_sla_credenciamento(row):
-    """
-    Calcula o SLA da Fase (DATAINICIAL) e o SLA Geral (DATADATAABERTURAPROCESSO).
-    Congela imediatamente a contagem se o PARECER for DEVOLVIDO, DEFERIDO, INDEFERIDO ou se tiver DATAFINAL.
-    """
-    fase = str(row[12] or '').strip().upper()
     parecer = str(row[20] or '').strip().upper()
     data_abertura = row[9]
     data_final_proc = str(row[10] or '').strip()
@@ -162,7 +150,6 @@ def calcular_sla_credenciamento(row):
         dias_fase = max(0, (hoje - dt_ini).days) if dt_ini else 0
         dias_geral = max(0, (hoje - dt_abert).days) if dt_abert else dias_fase
     else:
-        # Usa os dias congelados do próprio relatório ou calcula entre início e fim
         if row[17] and str(row[17]).strip().isdigit():
             dias_fase = int(str(row[17]).strip())
         elif dt_ini and dt_fim:
@@ -273,24 +260,71 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
     <div class="row justify-content-center g-4">
         <div class="col-md-4">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1><h4>Controle de Demandas</h4><p class="text-muted mb-4">Gerencie Rotinas, PDFs, Avulsas e acesse o Dashboard.</p>
-                <a href="/demandas" class="btn btn-info text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
+                <h1 class="text-primary mb-3" style="font-size: 3rem;">📂</h1>
+                <h4 class="fw-bold">Controle de Demandas</h4>
+                <p class="text-muted mb-4">Acesse Rotinas (PDFs), Demandas Avulsas e Credenciamento - Fases.</p>
+                <a href="/demandas" class="btn btn-primary text-white w-100 fw-bold py-2 mt-auto">Acessar Demandas</a>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1><h4>Pente Fino (RN 665)</h4><p class="text-muted mb-4">Substituição de Prestadores e análise de rede.</p>
+                <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1>
+                <h4 class="fw-bold">Dashboard Gerencial</h4>
+                <p class="text-muted mb-4">Painel executivo consolidado de Status, SLAs, Credenciamento e Produtividade.</p>
+                <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 fw-bold py-2 mt-auto">Acessar Dashboard</a>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100 p-4 border-0">
+                <h1 class="text-warning mb-3" style="font-size: 3rem;">🏥</h1>
+                <h4 class="fw-bold">Pente Fino (RN 665)</h4>
+                <p class="text-muted mb-4">Substituição de Prestadores (Sniper 2 Etapas) e Cruzamento Regional em Massa.</p>
                 <a href="/pentefino" class="btn btn-warning text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100 p-4 border-0">
-                <h1 class="text-success mb-3" style="font-size: 3rem;">📋</h1><h4>Credenciamento - Fases</h4><p class="text-muted mb-4">Acompanhamento diário de relatórios, SLA e fases de credenciamento.</p>
-                <a href="/credenciamento" class="btn btn-success text-white w-100 fw-bold py-2 mt-auto">Acessar Módulo</a>
             </div>
         </div>
     </div>
     {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-6"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a></div></div>{% endif %}
+</div></body></html>"""
+
+TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de Demandas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body style="background-color: #f0f2f5;">
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Central de Controle de Demandas</span></div></nav>
+<div class="container mt-5 text-center">
+    <h2 class="fw-bold mb-4" style="color: #004b87;">SELECIONE A FRENTE OPERACIONAL</h2>
+    <div class="row justify-content-center g-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📄</h1>
+                <h5 class="fw-bold text-secondary">Rotinas (PDFs)</h5>
+                <p class="text-muted small mb-4">Importação automática de lotes PDF e controle de SLA duplo (COCAP/FOP).</p>
+                <a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold mt-auto">Acessar PDFs</a>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📝</h1>
+                <h5 class="fw-bold text-secondary">Demandas Avulsas</h5>
+                <p class="text-muted small mb-4">Registro manual de solicitações, prazos e acompanhamento por área.</p>
+                <a href="/demandas/avulsas" class="btn btn-warning text-white w-100 py-3 fw-bold mt-auto">Acessar Avulsas</a>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📋</h1>
+                <h5 class="fw-bold text-secondary">Credenciamento - Fases</h5>
+                <p class="text-muted small mb-4">Relatório diário POSTAL191, linha do tempo por processo e SLA por fase.</p>
+                <a href="/credenciamento" class="btn btn-success text-white w-100 py-3 fw-bold mt-auto">Acessar Fases</a>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100 p-4">
+                <h1 class="mb-3">📊</h1>
+                <h5 class="fw-bold text-secondary">Dashboard Gerencial</h5>
+                <p class="text-muted small mb-4">Visão consolidada das 3 frentes, indicadores de SLA e gráficos.</p>
+                <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold mt-auto">Ver Dashboard</a>
+            </div>
+        </div>
+    </div>
 </div></body></html>"""
 
 TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Credenciamento - Fases</title>
@@ -306,8 +340,11 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-dark bg-dark">
   <div class="container-fluid">
-    <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a>
-    <span class="navbar-text text-white fw-bold">📋 Módulo: Credenciamento - Fases {% if ultima_att %}<small class="text-warning ms-2">(Atualizado em: {{ ultima_att }})</small>{% endif %}</span>
+    <div class="d-flex gap-2">
+        <a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar às Demandas</a>
+        <a href="/demandas/dashboard_graficos" class="btn btn-outline-info btn-sm">📊 Ir ao Dashboard</a>
+    </div>
+    <span class="navbar-text text-white fw-bold">📋 Demandas: Credenciamento - Fases {% if ultima_att %}<small class="text-warning ms-2">(Atualizado em: {{ ultima_att }})</small>{% endif %}</span>
     <div class="d-flex gap-2">
         <button class="btn btn-info btn-sm fw-bold text-white" type="button" data-bs-toggle="collapse" data-bs-target="#painelGraficosCred">📊 Mostrar/Ocultar Gráficos</button>
         <a href="/credenciamento/exportar?{{ request.query_string.decode('utf-8') }}" class="btn btn-success btn-sm fw-bold">⬇ Exportar Visão (Excel)</a>
@@ -335,7 +372,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Monitoramento de SLA do Credenciamento (Apenas EM ANÁLISE; Devolvidos/Deferidos param o SLA) -->
+    <!-- Monitoramento de SLA do Credenciamento -->
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="mb-0 text-secondary fw-bold">⏱️ Monitoramento de SLA por Fase (Em Análise na Visão: {{ sla_resumo.ativos }} | Parados/Concluídos/Devolvidos: {{ registros|length - sla_resumo.ativos }})</h6>
         <small class="text-muted">Nota: Fases Devolvidas, Deferidas ou Indeferidas param a contagem do SLA automaticamente.</small>
@@ -745,15 +782,6 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     </div>
 </div></body></html>"""
 
-TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de Demandas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Gestão de Demandas</span></div></nav>
-<div class="container mt-5 text-center"><div class="row justify-content-center">
-    <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📄</h1><a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold fs-6">Demandas de Rotina (PDFs)</a></div></div>
-    <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📝</h1><a href="/demandas/avulsas" class="btn btn-warning text-white w-100 py-3 fw-bold fs-6">Demandas Avulsas</a></div></div>
-    <div class="col-md-4 mb-4"><div class="card shadow-sm border-0 h-100 p-4"><h1 class="mb-3">📊</h1><a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold fs-6">Dashboard Gerencial</a></div></div>
-</div></div></body></html>"""
-
 TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
     .bg-atencao { background-color: #fff3cd !important; }
@@ -762,7 +790,7 @@ TELA_AVULSAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Demandas Avulsa
 </style>
 </head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Demandas Avulsas</span></div></nav>
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar às Demandas</a><span class="text-white fw-bold">Demandas Avulsas</span><a href="/demandas/dashboard_graficos" class="btn btn-outline-info btn-sm">📊 Dashboard</a></div></nav>
 <div class="container-fluid mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     
@@ -901,7 +929,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
 </style>
 </head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Processamento de PDFs</span></div></nav>
+<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar às Demandas</a><span class="text-white fw-bold">Processamento de PDFs</span><a href="/demandas/dashboard_graficos" class="btn btn-outline-info btn-sm">📊 Dashboard</a></div></nav>
 <div class="container-fluid mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
 
@@ -1069,37 +1097,55 @@ function abrirModalRotina(btn) {
 </script>
 </body></html>"""
 
-TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dashboard Gerencial</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dashboard Gerencial Unificado</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/demandas" class="btn btn-outline-light btn-sm">⬅ Voltar</a><span class="text-white fw-bold">Dashboard Geral</span></div></nav>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <div class="d-flex gap-2">
+        <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Portal Principal</a>
+        <a href="/demandas" class="btn btn-outline-info btn-sm">📂 Central de Demandas</a>
+    </div>
+    <span class="text-white fw-bold">📊 Dashboard Gerencial Unificado (PDFs + Avulsas + Credenciamento)</span>
+    <div>
+        <a href="/credenciamento" class="btn btn-success btn-sm fw-bold">📋 Ir para Credenciamento - Fases</a>
+    </div>
+  </div>
+</nav>
 <div class="container mt-4">
-    <!-- Resumo Geral -->
+    <!-- Resumo Geral Unificado (As 3 Frentes) -->
     <div class="row text-center mb-4 g-3">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card shadow-sm border-0 bg-primary text-white p-3 h-100">
-                <h5 class="mb-1">Total Geral de Demandas</h5>
-                <h1 class="fw-bold mb-0">{{ d_total }}</h1>
-                <small class="text-light opacity-75">Soma de todos os status</small>
+                <h6 class="mb-1 fw-bold">Total Geral Consolidado</h6>
+                <h1 class="fw-bold mb-0">{{ d_total_geral }}</h1>
+                <small class="text-light opacity-75">Soma das 3 Frentes Operacionais</small>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card shadow-sm border-0 bg-dark text-white p-3 h-100">
-                <h5 class="mb-1">Total Rotinas (PDFs)</h5>
+                <h6 class="mb-1 fw-bold">1. Rotinas (PDFs)</h6>
                 <h1 class="fw-bold mb-0">{{ t_rotina }}</h1>
                 <small class="text-light opacity-75">Processos via Upload PDF</small>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card shadow-sm border-0 bg-secondary text-white p-3 h-100">
-                <h5 class="mb-1">Total Demandas Avulsas</h5>
+                <h6 class="mb-1 fw-bold">2. Demandas Avulsas</h6>
                 <h1 class="fw-bold mb-0">{{ t_avulsa }}</h1>
                 <small class="text-light opacity-75">Registros manuais</small>
             </div>
         </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-success text-white p-3 h-100">
+                <h6 class="mb-1 fw-bold">3. Credenciamento (Fase Atual)</h6>
+                <h1 class="fw-bold mb-0">{{ t_cred_atual }}</h1>
+                <small class="text-light opacity-75">Total Histórico: {{ t_cred_total }} linhas</small>
+            </div>
+        </div>
     </div>
 
-    <!-- Contagem Detalhada de TODOS os Status -->
-    <h5 class="mb-3 text-secondary fw-bold">📊 Contagem Completa por Status (100% da Base)</h5>
+    <!-- Contagem Detalhada de TODOS os Status (Rotinas + Avulsas) -->
+    <h5 class="mb-3 text-secondary fw-bold">📊 Status: Rotinas (PDFs) & Demandas Avulsas</h5>
     <div class="row text-center g-3 mb-4">
         {% for item in status_cards %}
         <div class="col-md-3 col-sm-6">
@@ -1111,19 +1157,72 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
         </div>
         {% endfor %}
     </div>
+
+    <!-- Contagem Detalhada do Módulo Credenciamento - Fases -->
+    <h5 class="mb-3 text-secondary fw-bold">📋 Status/Parecer: Credenciamento - Fases (Fase Atual = SIM)</h5>
+    <div class="row text-center g-3 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #f0ad4e !important;">
+                <h6 class="text-secondary fw-bold mb-1">EM ANÁLISE (SLA Ativo)</h6>
+                <h2 class="fw-bold mb-0 text-warning">{{ cred_parecer.get('EM ANÁLISE', 0) }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #198754 !important;">
+                <h6 class="text-secondary fw-bold mb-1">DEFERIDOS (SLA Parado)</h6>
+                <h2 class="fw-bold mb-0 text-success">{{ cred_parecer.get('DEFERIDO', 0) }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #fd7e14 !important;">
+                <h6 class="text-secondary fw-bold mb-1">DEVOLVIDOS (SLA Parado)</h6>
+                <h2 class="fw-bold mb-0" style="color: #fd7e14;">{{ cred_parecer.get('DEVOLVIDO', 0) }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #dc3545 !important;">
+                <h6 class="text-secondary fw-bold mb-1">INDEFERIDOS (SLA Parado)</h6>
+                <h2 class="fw-bold mb-0 text-danger">{{ cred_parecer.get('INDEFERIDO', 0) }}</h2>
+            </div>
+        </div>
+    </div>
     
-    <!-- SLA COCAP (Apenas Demandas Ativas - Exclui Finalizadas, Concluídas e Devolvidas) -->
-    <h5 class="mb-0 text-secondary fw-bold mt-4">⏱️ Monitoramento de SLA COCAP (Demandas Ativas em Aberto: {{ total_ativas }})</h5>
-    <small class="text-muted">Processos Finalizados, Concluídos, Devolvidos ou Cancelados têm o SLA parado e não entram nesta fila.</small>
+    <!-- SLA UNIFICADO (PDFs + Avulsas + Credenciamento) -->
+    <h5 class="mb-0 text-secondary fw-bold mt-4">⏱️ Monitoramento Unificado de SLA (Total em Aberto nas 3 Frentes: {{ total_ativas_unificado }})</h5>
+    <small class="text-muted">Processos Finalizados, Concluídos, Deferidos, Indeferidos ou Devolvidos têm o SLA congelado automaticamente.</small>
     <div class="row text-center mt-2 mb-4 g-3">
-        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #e2e3e5; color: #383d41;"><h6 class="mb-1 fw-bold">No Prazo (0 a 1 dia)</h6><h2 class="fw-bold mb-0">{{ sla_em_dia }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #fff3cd; color: #856404;"><h6 class="mb-1 fw-bold">Atenção (2 a 3 dias)</h6><h2 class="fw-bold mb-0">{{ sla_atencao }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #ffe8cc; color: #d35400;"><h6 class="mb-1 fw-bold">Urgente (4 a 5 dias)</h6><h2 class="fw-bold mb-0">{{ sla_urgente }}</h2></div></div>
-        <div class="col-md-3"><div class="card shadow-sm border-0 p-3" style="background-color: #f8d7da; color: #721c24;"><h6 class="mb-1 fw-bold">Crítico (6+ dias)</h6><h2 class="fw-bold mb-0">{{ sla_critico }}</h2></div></div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3 h-100" style="background-color: #e2e3e5; color: #383d41;">
+                <h6 class="mb-1 fw-bold">No Prazo (0 a 1 dia)</h6>
+                <h2 class="fw-bold mb-1">{{ sla_em_dia + cred_sla.no_prazo }}</h2>
+                <small>Demandas: {{ sla_em_dia }} | Credenc.: {{ cred_sla.no_prazo }}</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3 h-100" style="background-color: #fff3cd; color: #856404;">
+                <h6 class="mb-1 fw-bold">Atenção (2 a 3 dias)</h6>
+                <h2 class="fw-bold mb-1">{{ sla_atencao + cred_sla.atencao }}</h2>
+                <small>Demandas: {{ sla_atencao }} | Credenc.: {{ cred_sla.atencao }}</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3 h-100" style="background-color: #ffe8cc; color: #d35400;">
+                <h6 class="mb-1 fw-bold">Urgente (4 a 5 dias)</h6>
+                <h2 class="fw-bold mb-1">{{ sla_urgente + cred_sla.urgente }}</h2>
+                <small>Demandas: {{ sla_urgente }} | Credenc.: {{ cred_sla.urgente }}</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3 h-100" style="background-color: #f8d7da; color: #721c24;">
+                <h6 class="mb-1 fw-bold">Crítico (6+ dias)</h6>
+                <h2 class="fw-bold mb-1">{{ sla_critico + cred_sla.critico }}</h2>
+                <small>Demandas: {{ sla_critico }} | Credenc.: {{ cred_sla.critico }}</small>
+            </div>
+        </div>
     </div>
 
     <div class="row">
-        <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Produtividade por Colaborador</h5><img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid rounded"></div></div></div>
+        <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Produtividade por Colaborador (Rotinas)</h5><img src="data:image/png;base64,{{ chart_prod }}" class="img-fluid rounded"></div></div></div>
         <div class="col-md-6 mb-4"><div class="card shadow-sm border-0 h-100"><div class="card-body text-center"><h5 class="fw-bold text-secondary mb-3">Distribuição por Tipo de Demanda</h5><img src="data:image/png;base64,{{ chart_tipo }}" class="img-fluid rounded"></div></div></div>
     </div>
 </div></body></html>"""
@@ -1468,37 +1567,74 @@ def extrair_especialidades(series):
     return specs
 
 def ler_arquivo(file_obj, nrows=None):
+    """
+    Leitor universal blindado: suporta arquivos com separador especial (Ź / POSTAL191),
+    CSV com ponto-e-vírgula/vírgula/pipe e planilhas Excel (.xlsx/.xls) sem quebrar em linhas com ';' ou aspas.
+    """
     filename = file_obj.filename.lower()
     if filename.endswith('.csv') or filename.endswith('.txt'):
         raw_bytes = file_obj.read()
         file_obj.seek(0)
+        
         texto_decodificado = None
-        for enc in ['utf-8-sig', 'utf-8', 'cp1250', 'iso-8859-2', 'latin1', 'cp1252']:
+        # Prioriza UTF-8 e CP1250/ISO-8859-2 (onde o byte 0x8F vira 'Ź')
+        for enc in ['utf-8-sig', 'utf-8', 'cp1250', 'iso-8859-2', 'cp1252', 'latin1']:
             try:
                 t = raw_bytes.decode(enc)
-                if 'Ź' in t or 'FILIALPADRAO' in t or ';' in t:
-                    texto_decodificado = t
-                    break
+                texto_decodificado = t
+                break
             except Exception:
                 continue
         if texto_decodificado is None:
             texto_decodificado = raw_bytes.decode('latin1', errors='replace')
             
-        primeira_linha = texto_decodificado.splitlines()[0] if texto_decodificado else ""
-        sep = ';'
-        if 'Ź' in primeira_linha:
+        linhas = [l for l in texto_decodificado.splitlines() if l.strip()]
+        if not linhas:
+            return pd.DataFrame()
+            
+        primeira_linha = linhas[0]
+        
+        # Detecção inteligente do separador exato entre FILIALPADRAO e CNPJCPF (caso seja o POSTAL191)
+        m_sep = re.search(r'FILIALPADRAO(.+?)CNPJCPF', primeira_linha, re.IGNORECASE)
+        if m_sep:
+            sep = m_sep.group(1)
+        elif 'Ź' in primeira_linha:
             sep = 'Ź'
         elif '\x8f' in primeira_linha:
             sep = '\x8f'
+        elif ';' in primeira_linha:
+            sep = ';'
         elif '|' in primeira_linha:
             sep = '|'
         elif '\t' in primeira_linha:
             sep = '\t'
-        elif ',' in primeira_linha and ';' not in primeira_linha:
+        else:
             sep = ','
-            
+
+        # Se for relatório estilo POSTAL191 ou TXT delimitado, faz split direto linha a linha
+        # Isso evita 100% o erro "Expected X fields, saw Y" causado por ';' ou aspas dentro de OBSERVACAO
+        if m_sep or sep in ['Ź', '\x8f'] or filename.endswith('.txt'):
+            cabecalhos = [c.strip() for c in primeira_linha.split(sep)]
+            while cabecalhos and cabecalhos[-1] == '':
+                cabecalhos.pop()
+            num_cols = len(cabecalhos)
+            dados = []
+            limite = (nrows + 1) if nrows is not None else len(linhas)
+            for l in linhas[1:limite]:
+                partes = l.split(sep)
+                if len(partes) >= num_cols:
+                    partes = partes[:num_cols]
+                else:
+                    partes.extend([''] * (num_cols - len(partes)))
+                dados.append(partes)
+            return pd.DataFrame(dados, columns=cabecalhos, dtype=str)
+
+        import csv
         from io import StringIO
-        return pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, engine='python')
+        try:
+            return pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, engine='python', on_bad_lines='skip')
+        except Exception:
+            return pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, engine='python', quoting=csv.QUOTE_NONE, on_bad_lines='skip')
     else:
         return pd.read_excel(file_obj, dtype=str, nrows=nrows)
 
@@ -1992,7 +2128,6 @@ def editar_avulsa():
 
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
     try:
-        # Se mudou para Concluído, Finalizada, Devolvido ou Cancelada, grava a data de conclusão para congelar o SLA
         if str(status or '').strip().upper() in STATUS_ENCERRADOS_DEMANDAS:
             dt_fim = datetime.now().strftime("%d/%m/%Y")
             c.execute(f"UPDATE demandas_avulsas SET tipo_demanda={ph}, assunto={ph}, solicitante={ph}, prazo={ph}, status={ph}, responsavel={ph}, observacao={ph}, data_conclusao=COALESCE(NULLIF(data_conclusao, ''), {ph}) WHERE id={ph}",
@@ -2123,7 +2258,6 @@ def editar_rotina():
     proc = request.form.get('tipo_processo'); fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
     resp = request.form.get('responsavel'); data_fop = request.form.get('data_aprovacao')
 
-    # Se o usuário marcou DEVOLVIDO no Tipo Processo, sincroniza o status para Devolvido
     if str(proc or '').strip().upper() == 'DEVOLVIDO' and status not in ['Finalizada', 'Cancelada']:
         status = 'Devolvido'
 
@@ -2148,10 +2282,14 @@ def editar_rotina():
 @app.route('/demandas/dashboard_graficos')
 def dashboard_graficos():
     if 'user' not in session: return redirect(url_for('login'))
+    inicializar_tabela_credenciamento()
     conn = conectar_db(); c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
-    total = t_rotina + t_avulsa
+    c.execute("SELECT COUNT(*) FROM credenciamento_fases"); t_cred_total = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM credenciamento_fases WHERE ultima_fase='SIM'"); t_cred_atual = c.fetchone()[0]
+    
+    d_total_geral = t_rotina + t_avulsa + t_cred_atual
     
     c.execute("SELECT status, COUNT(*) FROM demands GROUP BY status")
     rot_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
@@ -2192,7 +2330,7 @@ def dashboard_graficos():
                 'cor': cores_status.get(st, '#004b87')
             })
     
-    # Filtra apenas as demandas abertas (exclui Finalizada, Concluído, Devolvido, Cancelada)
+    # SLA das Demandas (Rotinas + Avulsas)
     c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
     pendentes_rotina = c.fetchall()
     c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
@@ -2209,6 +2347,24 @@ def dashboard_graficos():
         elif s >= 4: sla_urgente += 1
         elif s >= 2: sla_atencao += 1
         else: sla_em_dia += 1
+
+    # Indicadores e SLA de Credenciamento - Fases (Fase Atual = SIM)
+    c.execute("SELECT * FROM credenciamento_fases WHERE ultima_fase='SIM'")
+    rows_cred_atual = c.fetchall()
+    cred_parecer = {}
+    cred_sla = {"ativos": 0, "no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0}
+    for rc in rows_cred_atual:
+        par = str(rc[20] or 'SEM PARECER').strip().upper()
+        cred_parecer[par] = cred_parecer.get(par, 0) + 1
+        info_c = calcular_sla_credenciamento(rc)
+        if info_c["ativo"]:
+            cred_sla["ativos"] += 1
+            if info_c["faixa_sla"] == "Crítico": cred_sla["critico"] += 1
+            elif info_c["faixa_sla"] == "Urgente": cred_sla["urgente"] += 1
+            elif info_c["faixa_sla"] == "Atenção": cred_sla["atencao"] += 1
+            else: cred_sla["no_prazo"] += 1
+
+    total_ativas_unificado = total_ativas + cred_sla["ativos"]
 
     fig1, ax1 = plt.subplots(figsize=(6,4))
     c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to")
@@ -2228,7 +2384,15 @@ def dashboard_graficos():
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
     conn.close()
-    return render_template_string(TELA_DASHBOARD_GRAFICOS, d_total=total, t_rotina=t_rotina, t_avulsa=t_avulsa, status_cards=status_cards, chart_prod=chart_prod, chart_tipo=chart_tipo, sla_em_dia=sla_em_dia, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico, total_ativas=total_ativas)
+    return render_template_string(
+        TELA_DASHBOARD_GRAFICOS,
+        d_total_geral=d_total_geral, t_rotina=t_rotina, t_avulsa=t_avulsa,
+        t_cred_total=t_cred_total, t_cred_atual=t_cred_atual,
+        status_cards=status_cards, cred_parecer=cred_parecer, cred_sla=cred_sla,
+        chart_prod=chart_prod, chart_tipo=chart_tipo,
+        sla_em_dia=sla_em_dia, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico,
+        total_ativas_unificado=total_ativas_unificado
+    )
 
 @app.route('/pentefino')
 def hub_pentefino():
