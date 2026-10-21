@@ -95,7 +95,8 @@ sincronizar_sequencias()
 # ==========================================
 STATUS_ENCERRADOS_DEMANDAS = {
     'CONCLUÍDO', 'CONCLUIDO', 'FINALIZADA', 'FINALIZADO',
-    'DEVOLVIDO', 'DEVOLVIDA', 'CANCELADA', 'CANCELADO'
+    'DEVOLVIDO', 'DEVOLVIDA', 'CANCELADA', 'CANCELADO',
+    'DEFERIDO', 'INDEFERIDO'
 }
 
 def parse_data_br(data_str):
@@ -134,11 +135,11 @@ def calcular_sla_credenciamento(row):
     data_inicial_fase = row[14]
     data_final_fase = str(row[15] or '').strip()
 
-    # Para o relógio se foi DEVOLVIDO, INDEFERIDO, DEFERIDO ou se já tem data final registrada
+    # Para o relógio se o status/parecer for encerrado ou devolvido
     parado = False
-    if parecer in ['DEVOLVIDO', 'INDEFERIDO', 'DEFERIDO', 'FINALIZADO', 'CONCLUÍDO', 'CANCELADO']:
+    if parecer in STATUS_ENCERRADOS_DEMANDAS:
         parado = True
-    elif data_final_proc != '' or data_final_fase != '':
+    elif (data_final_proc != '' or data_final_fase != '') and parecer not in ['EM ANÁLISE', 'EM ANALISE', 'PENDENTE', 'AGUARDANDO 90 DIAS', 'AGUARDANDO RETORNO']:
         parado = True
 
     dt_ini = parse_data_br(data_inicial_fase) or parse_data_br(data_abertura)
@@ -150,17 +151,17 @@ def calcular_sla_credenciamento(row):
         dias_fase = max(0, (hoje - dt_ini).days) if dt_ini else 0
         dias_geral = max(0, (hoje - dt_abert).days) if dt_abert else dias_fase
     else:
-        if row[17] and str(row[17]).strip().isdigit():
-            dias_fase = int(str(row[17]).strip())
-        elif dt_ini and dt_fim:
+        if dt_ini and dt_fim:
             dias_fase = max(0, (dt_fim - dt_ini).days)
+        elif row[17] and str(row[17]).strip().isdigit():
+            dias_fase = int(str(row[17]).strip())
         else:
             dias_fase = 0
 
-        if row[18] and str(row[18]).strip().isdigit():
-            dias_geral = int(str(row[18]).strip())
-        elif dt_abert and dt_fim:
+        if dt_abert and dt_fim:
             dias_geral = max(0, (dt_fim - dt_abert).days)
+        elif row[18] and str(row[18]).strip().isdigit():
+            dias_geral = int(str(row[18]).strip())
         else:
             dias_geral = dias_fase
 
@@ -209,6 +210,37 @@ def corrigir_encoding_postal(texto):
 # ==========================================
 TIPOS_ROTINA = ["Reajuste", "Novo Contrato", "Inclusão", "Exclusão", "Ajuste", "Extensão", "Descredenciamento", "Não Identificada"]
 STATUS_ROTINA = ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Cancelada']
+
+FASES_PADRAO_CRED = [
+    "1-DEMANDA",
+    "3-PARECER REGIONAL-NOVO CREDEN (ALÇADA SEDE)",
+    "3-PARECER SEDE - NOVO CREDENCIADO",
+    "3-REANÁLISE REGIONAL-NOVO CREDEN (ALÇADA SEDE)",
+    "3-REANÁLISE SEDE - NOVO CREDENCIADO",
+    "4-ANÁLISE DOC. PROPONENTE- (ALÇADA SEDE)",
+    "4-PARECER SEDE - DOC. PROPONENTE",
+    "4-REANÁLISE DOC. PROPONENTE (ALÇADA SEDE)",
+    "4-REANÁLISE SEDE - DOC. PROPONENTE",
+    "5-ANÁLISE CONTRATO CREDENCIAMENTO",
+    "5-PARECER SEDE - CONTRATO CREDENCIAMENTO",
+    "6-PARECER FINAL (SEDE)",
+    "8-GARANTIA DE ATENDIMENTO",
+    "9-FORNECEDOR"
+]
+
+STATUS_CRED = [
+    "Pendente",
+    "Em Análise",
+    "EM ANÁLISE",
+    "Aguardando 90 dias",
+    "Aguardando Retorno",
+    "Devolvido",
+    "DEVOLVIDO",
+    "Finalizada",
+    "DEFERIDO",
+    "INDEFERIDO",
+    "Cancelada"
+]
 
 TIPOS_AVULSA = ['Credenciamento', 'Descredenciamento', 'Análise de Vulnerabilidade', 'Parametrização', 'Resposta de E-mail', 'RPS', 'Lote de Erros', 'Atendimento de Chamado', 'Atualização Cadastral', 'Outro']
 STATUS_AVULSA = ['Pendente', 'Recebida', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Aguardando Área Demandante', 'Em andamento', 'Devolvido', 'Concluído', 'Cancelada']
@@ -312,7 +344,7 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
             <div class="card shadow-sm border-0 h-100 p-4">
                 <h1 class="mb-3">📋</h1>
                 <h5 class="fw-bold text-secondary">Credenciamento - Fases</h5>
-                <p class="text-muted small mb-4">Relatório diário POSTAL191, linha do tempo por processo e SLA por fase.</p>
+                <p class="text-muted small mb-4">Relatório diário POSTAL191, edição de fase/status e linha do tempo.</p>
                 <a href="/credenciamento" class="btn btn-success text-white w-100 py-3 fw-bold mt-auto">Acessar Fases</a>
             </div>
         </div>
@@ -374,8 +406,8 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
 
     <!-- Monitoramento de SLA do Credenciamento -->
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="mb-0 text-secondary fw-bold">⏱️ Monitoramento de SLA por Fase (Em Análise na Visão: {{ sla_resumo.ativos }} | Parados/Concluídos/Devolvidos: {{ registros|length - sla_resumo.ativos }})</h6>
-        <small class="text-muted">Nota: Fases Devolvidas, Deferidas ou Indeferidas param a contagem do SLA automaticamente.</small>
+        <h6 class="mb-0 text-secondary fw-bold">⏱️ Monitoramento de SLA por Fase (Ativos na Visão: {{ sla_resumo.ativos }} | Parados/Concluídos/Devolvidos: {{ registros|length - sla_resumo.ativos }})</h6>
+        <small class="text-muted">Nota: Status Finalizada, Devolvido, Deferido ou Indeferido param a contagem do SLA automaticamente.</small>
     </div>
     <div class="row text-center g-2 mb-3">
         <div class="col-md-2 col-6">
@@ -416,7 +448,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Cards Resumo por Parecer -->
+    <!-- Cards Resumo por Status / Parecer -->
     <div class="row text-center g-2 mb-3">
         <div class="col-md-2 col-6">
             <div class="card shadow-sm border-0 bg-primary text-white p-2 h-100">
@@ -426,14 +458,14 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
         <div class="col-md-3 col-6">
             <div class="card shadow-sm border-0 bg-warning text-dark p-2 h-100">
-                <small class="fw-bold">Parecer: Em Análise (SLA Ativo)</small>
-                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('EM ANÁLISE', 0) }}</h4>
+                <small class="fw-bold">Em Análise / Pendentes (SLA Ativo)</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('EM ANÁLISE', 0) + kpi_parecer.get('EM ANALISE', 0) + kpi_parecer.get('PENDENTE', 0) + kpi_parecer.get('AGUARDANDO 90 DIAS', 0) + kpi_parecer.get('AGUARDANDO RETORNO', 0) }}</h4>
             </div>
         </div>
         <div class="col-md-3 col-6">
             <div class="card shadow-sm border-0 bg-success text-white p-2 h-100">
-                <small class="fw-bold">Parecer: Deferidos (SLA Parado)</small>
-                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('DEFERIDO', 0) }}</h4>
+                <small class="fw-bold">Deferidos / Finalizados (SLA Parado)</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('DEFERIDO', 0) + kpi_parecer.get('FINALIZADA', 0) + kpi_parecer.get('CONCLUÍDO', 0) }}</h4>
             </div>
         </div>
         <div class="col-md-2 col-6">
@@ -444,8 +476,8 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
         <div class="col-md-2 col-6">
             <div class="card shadow-sm border-0 bg-danger text-white p-2 h-100">
-                <small class="fw-bold">Indeferidos (SLA Parado)</small>
-                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('INDEFERIDO', 0) }}</h4>
+                <small class="fw-bold">Indeferidos / Cancel.</small>
+                <h4 class="fw-bold mb-0">{{ kpi_parecer.get('INDEFERIDO', 0) + kpi_parecer.get('CANCELADA', 0) }}</h4>
             </div>
         </div>
     </div>
@@ -527,7 +559,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
                     </select>
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label small fw-bold mb-1">Parecer</label>
+                    <label class="form-label small fw-bold mb-1">Status/Parecer</label>
                     <select name="parecer" class="form-select form-select-sm">
                         <option value="Todos">Todos</option>
                         {% for pa in lista_pareceres %}<option value="{{pa}}" {% if f_parecer == pa %}selected{% endif %}>{{pa}}</option>{% endfor %}
@@ -556,7 +588,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0 text-secondary fw-bold">Processos de Credenciamento <small class="text-muted">(Duplo clique na linha para ver Linha do Tempo e Parecer Completo)</small></h5>
+                <h5 class="mb-0 text-secondary fw-bold">Processos de Credenciamento <small class="text-muted">(Duplo clique na linha para Editar Fase, Status, Responsável e Observação)</small></h5>
                 <span class="badge bg-primary fs-6">{{ registros|length }} Registro(s)</span>
             </div>
             <div class="table-responsive">
@@ -573,25 +605,25 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
                             <th class="text-start">Fase</th>
                             <th>Últ. Fase</th>
                             <th>Entrada Fase</th>
-                            <th>Próx. Alçada</th>
-                            <th>Parecer</th>
+                            <th>Status / Parecer</th>
                             <th>Origem</th>
                             <th>Responsável</th>
-                            <th>Detalhes</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in registros %}
                         {% set r = item.row %}
                         {% set s = item.sla %}
-                        <tr class="{{ s.cor_linha }}" ondblclick="verHistoricoProcesso('{{ r[8] }}')">
+                        {% set st_up = (r[20] or '')|upper %}
+                        <tr class="{{ s.cor_linha }}" ondblclick="document.getElementById('btn-edit-cred-{{r[0]}}').click();">
                             <td class="fw-bold text-primary">{{ r[8] }}</td>
                             <td>
                                 {% if s.ativo %}
                                     <span class="badge bg-{{ 'danger' if s.dias_fase >= 6 else 'warning text-dark' if s.dias_fase >= 2 else 'secondary' }} mb-1">Fase: {{ s.dias_fase }}d</span><br>
                                     <span class="badge" style="background-color: {{ '#6f42c1' if s.estourou_90d else '#6c757d' }};">Geral: {{ s.dias_geral }}d {{ '⚠️' if s.estourou_90d else '' }}</span>
                                 {% else %}
-                                    <span class="badge bg-{{ 'secondary' if r[20]=='DEVOLVIDO' else 'danger' if r[20]=='INDEFERIDO' else 'success' }} mb-1">SLA Parado ({{ s.dias_fase }}d)</span><br>
+                                    <span class="badge bg-{{ 'secondary' if st_up=='DEVOLVIDO' else 'danger' if st_up in ('INDEFERIDO', 'CANCELADA') else 'success' }} mb-1">SLA Parado ({{ s.dias_fase }}d)</span><br>
                                     <small class="text-muted">Geral: {{ s.dias_geral }}d</small>
                                 {% endif %}
                             </td>
@@ -612,24 +644,102 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
                                 <span class="badge bg-{{ 'primary' if r[13] == 'SIM' else 'light text-muted border' }}">{{ r[13] }}</span>
                             </td>
                             <td>{{ r[14] }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ r[16] if r[16] else '-' }}</span></td>
                             <td>
-                                <span class="badge bg-{{ 'success' if r[20]=='DEFERIDO' else 'warning text-dark' if r[20]=='EM ANÁLISE' else 'danger' if r[20]=='INDEFERIDO' else 'secondary' }}">{{ r[20] }}</span>
+                                <span class="badge bg-{{ 'success' if st_up in ('DEFERIDO', 'FINALIZADA', 'CONCLUÍDO') else 'dark' if st_up=='PENDENTE' else 'warning text-dark' if st_up in ('EM ANÁLISE', 'EM ANALISE', 'AGUARDANDO 90 DIAS', 'AGUARDANDO RETORNO') else 'danger' if st_up in ('INDEFERIDO', 'DEVOLVIDO') else 'secondary' }}">{{ r[20] }}</span>
                             </td>
                             <td><strong>{{ r[22] }}</strong></td>
                             <td>{{ r[11] }}</td>
-                            <td>
-                                <button type="button" class="btn btn-outline-primary btn-sm fw-bold" onclick="verHistoricoProcesso('{{ r[8] }}')" title="Ver Linha do Tempo e Pareceres">🔍</button>
+                            <td class="text-nowrap">
+                                <form method="POST" action="/credenciamento/acao" style="display:inline;">
+                                    <input type="hidden" name="id" value="{{ r[0] }}">
+                                    <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" title="Assumir Processo">✋</button>
+                                </form>
+                                <button id="btn-edit-cred-{{r[0]}}" type="button" class="btn btn-primary btn-sm fw-bold" title="Editar Fase, Status, Responsável e Observação"
+                                    data-id="{{ r[0] }}"
+                                    data-proc="{{ r[8] }}"
+                                    data-nome="{{ r[3] }}"
+                                    data-cnpj="{{ r[2] }}"
+                                    data-fase="{{ r[12] if r[12] else '' }}"
+                                    data-status="{{ r[20] if r[20] else 'Em Análise' }}"
+                                    data-resp="{{ r[11] if r[11] else 'Nenhum' }}"
+                                    data-origem="{{ r[22] if r[22] else 'SEDE' }}"
+                                    data-obs="{{ r[21] if r[21] else '' }}"
+                                    onclick="abrirModalEditarCred(this)">✏️</button>
+                                <button type="button" class="btn btn-outline-dark btn-sm fw-bold" onclick="verHistoricoProcesso('{{ r[8] }}')" title="Ver Linha do Tempo do Processo">🔍</button>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="15" class="text-center text-muted py-4 fs-6">Nenhum processo encontrado. Carregue o relatório diário acima ou ajuste os filtros.</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-4 fs-6">Nenhum processo encontrado. Carregue o relatório diário acima ou ajuste os filtros.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Modal de Edição (Duplo Clique na Linha de Credenciamento - Fases) -->
+<div class="modal fade" id="modalEditarCred" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title fw-bold">✏️ Analisar / Editar Processo de Credenciamento</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/credenciamento/editar">
+      <div class="modal-body">
+        <input type="hidden" name="id" id="edit_cred_id">
+        <div class="alert alert-secondary py-2 mb-3">
+            <strong>Processo Nº:</strong> <span id="lbl_cred_proc" class="text-primary fw-bold"></span> |
+            <strong>CNPJ/CPF:</strong> <span id="lbl_cred_cnpj"></span><br>
+            <strong>Prestador:</strong> <span id="lbl_cred_nome" class="fw-bold"></span>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-12">
+                <label class="form-label fw-bold text-primary">Fase do Credenciamento</label>
+                <select name="fase" id="edit_cred_fase" class="form-select border-primary" required>
+                    {% for fa in opcoes_fases_modal %}
+                    <option value="{{ fa }}">{{ fa }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold text-success">Status / Parecer</label>
+                <select name="status" id="edit_cred_status" class="form-select border-success" required>
+                    {% for st in status_cred_modal %}
+                    <option value="{{ st }}">{{ st }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold text-primary">Responsável (Login)</label>
+                <select name="responsavel" id="edit_cred_resp" class="form-select border-primary">
+                    {% for u in usuarios_login %}
+                    <option value="{{ u }}">{{ u }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Origem / Alçada</label>
+                <select name="origem_parecer" id="edit_cred_origem" class="form-select">
+                    <option value="SEDE">SEDE</option>
+                    <option value="REGIONAL">REGIONAL</option>
+                    <option value="URR/NAR">URR/NAR</option>
+                </select>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label fw-bold">Observação / Parecer Técnico</label>
+                <textarea name="observacao" id="edit_cred_obs" class="form-control" rows="5" placeholder="Digite as observações da análise..."></textarea>
+            </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success fw-bold">💾 Salvar Alterações</button>
+      </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Linha do Tempo e Detalhes do Processo -->
@@ -652,6 +762,32 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+function selecionarOuCriarOpcao(selectEl, valor) {
+    if (!valor) return;
+    let existe = Array.from(selectEl.options).some(opt => opt.value === valor);
+    if (!existe) {
+        selectEl.options.add(new Option(valor, valor));
+    }
+    selectEl.value = valor;
+}
+
+function abrirModalEditarCred(btn) {
+    document.getElementById('edit_cred_id').value = btn.getAttribute('data-id');
+    document.getElementById('lbl_cred_proc').innerText = btn.getAttribute('data-proc') || '-';
+    document.getElementById('lbl_cred_cnpj').innerText = btn.getAttribute('data-cnpj') || '-';
+    document.getElementById('lbl_cred_nome').innerText = btn.getAttribute('data-nome') || '-';
+
+    selecionarOuCriarOpcao(document.getElementById('edit_cred_fase'), btn.getAttribute('data-fase'));
+    selecionarOuCriarOpcao(document.getElementById('edit_cred_status'), btn.getAttribute('data-status'));
+    selecionarOuCriarOpcao(document.getElementById('edit_cred_resp'), btn.getAttribute('data-resp'));
+    selecionarOuCriarOpcao(document.getElementById('edit_cred_origem'), btn.getAttribute('data-origem'));
+
+    let obsBruta = btn.getAttribute('data-obs') || '';
+    document.getElementById('edit_cred_obs').value = obsBruta.replace(/--/g, '\\n');
+
+    new bootstrap.Modal(document.getElementById('modalEditarCred')).show();
+}
+
 function verHistoricoProcesso(numProcesso) {
     let modalEl = document.getElementById('modalHistoricoCred');
     let modal = new bootstrap.Modal(modalEl);
@@ -689,7 +825,8 @@ function verHistoricoProcesso(numProcesso) {
         `;
 
         data.etapas.forEach((et, idx) => {
-            let badgeCor = et.parecer === 'DEFERIDO' ? 'success' : (et.parecer === 'EM ANÁLISE' ? 'warning text-dark' : (et.parecer === 'INDEFERIDO' ? 'danger' : 'secondary'));
+            let stUp = (et.parecer || '').toUpperCase();
+            let badgeCor = (stUp === 'DEFERIDO' || stUp === 'FINALIZADA') ? 'success' : (stUp === 'EM ANÁLISE' || stUp === 'EM ANALISE' || stUp === 'PENDENTE' ? 'warning text-dark' : (stUp === 'INDEFERIDO' || stUp === 'DEVOLVIDO' ? 'danger' : 'secondary'));
             let destaqueAtual = et.ultima_fase === 'SIM' ? 'border-primary border-2' : '';
             let obsFormatada = (et.observacao || 'Sem observações registadas.').replace(/--/g, '\\n');
             html += `
@@ -1163,14 +1300,14 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
     <div class="row text-center g-3 mb-4">
         <div class="col-md-3 col-6">
             <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #f0ad4e !important;">
-                <h6 class="text-secondary fw-bold mb-1">EM ANÁLISE (SLA Ativo)</h6>
-                <h2 class="fw-bold mb-0 text-warning">{{ cred_parecer.get('EM ANÁLISE', 0) }}</h2>
+                <h6 class="text-secondary fw-bold mb-1">EM ANÁLISE / PENDENTES (SLA Ativo)</h6>
+                <h2 class="fw-bold mb-0 text-warning">{{ cred_parecer.get('EM ANÁLISE', 0) + cred_parecer.get('EM ANALISE', 0) + cred_parecer.get('PENDENTE', 0) + cred_parecer.get('AGUARDANDO 90 DIAS', 0) + cred_parecer.get('AGUARDANDO RETORNO', 0) }}</h2>
             </div>
         </div>
         <div class="col-md-3 col-6">
             <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #198754 !important;">
-                <h6 class="text-secondary fw-bold mb-1">DEFERIDOS (SLA Parado)</h6>
-                <h2 class="fw-bold mb-0 text-success">{{ cred_parecer.get('DEFERIDO', 0) }}</h2>
+                <h6 class="text-secondary fw-bold mb-1">DEFERIDOS / FINALIZADOS (SLA Parado)</h6>
+                <h2 class="fw-bold mb-0 text-success">{{ cred_parecer.get('DEFERIDO', 0) + cred_parecer.get('FINALIZADA', 0) + cred_parecer.get('CONCLUÍDO', 0) }}</h2>
             </div>
         </div>
         <div class="col-md-3 col-6">
@@ -1181,8 +1318,8 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
         </div>
         <div class="col-md-3 col-6">
             <div class="card shadow-sm border-0 p-3 h-100" style="border-left: 5px solid #dc3545 !important;">
-                <h6 class="text-secondary fw-bold mb-1">INDEFERIDOS (SLA Parado)</h6>
-                <h2 class="fw-bold mb-0 text-danger">{{ cred_parecer.get('INDEFERIDO', 0) }}</h2>
+                <h6 class="text-secondary fw-bold mb-1">INDEFERIDOS / CANCEL. (SLA Parado)</h6>
+                <h2 class="fw-bold mb-0 text-danger">{{ cred_parecer.get('INDEFERIDO', 0) + cred_parecer.get('CANCELADA', 0) }}</h2>
             </div>
         </div>
     </div>
@@ -1567,17 +1704,12 @@ def extrair_especialidades(series):
     return specs
 
 def ler_arquivo(file_obj, nrows=None):
-    """
-    Leitor universal blindado: suporta arquivos com separador especial (Ź / POSTAL191),
-    CSV com ponto-e-vírgula/vírgula/pipe e planilhas Excel (.xlsx/.xls) sem quebrar em linhas com ';' ou aspas.
-    """
     filename = file_obj.filename.lower()
     if filename.endswith('.csv') or filename.endswith('.txt'):
         raw_bytes = file_obj.read()
         file_obj.seek(0)
         
         texto_decodificado = None
-        # Prioriza UTF-8 e CP1250/ISO-8859-2 (onde o byte 0x8F vira 'Ź')
         for enc in ['utf-8-sig', 'utf-8', 'cp1250', 'iso-8859-2', 'cp1252', 'latin1']:
             try:
                 t = raw_bytes.decode(enc)
@@ -1594,7 +1726,6 @@ def ler_arquivo(file_obj, nrows=None):
             
         primeira_linha = linhas[0]
         
-        # Detecção inteligente do separador exato entre FILIALPADRAO e CNPJCPF (caso seja o POSTAL191)
         m_sep = re.search(r'FILIALPADRAO(.+?)CNPJCPF', primeira_linha, re.IGNORECASE)
         if m_sep:
             sep = m_sep.group(1)
@@ -1611,8 +1742,6 @@ def ler_arquivo(file_obj, nrows=None):
         else:
             sep = ','
 
-        # Se for relatório estilo POSTAL191 ou TXT delimitado, faz split direto linha a linha
-        # Isso evita 100% o erro "Expected X fields, saw Y" causado por ';' ou aspas dentro de OBSERVACAO
         if m_sep or sep in ['Ź', '\x8f'] or filename.endswith('.txt'):
             cabecalhos = [c.strip() for c in primeira_linha.split(sep)]
             while cabecalhos and cabecalhos[-1] == '':
@@ -1773,7 +1902,7 @@ def credenciamento_fases():
             else: sla_resumo["no_prazo"] += 1
             if info_sla["estourou_90d"]: sla_resumo["alerta_90d"] += 1
 
-        par = r[20] if r[20] else 'SEM PARECER'
+        par = str(r[20] or 'SEM PARECER').strip().upper()
         kpi_parecer[par] = kpi_parecer.get(par, 0) + 1
         fa = r[12] if r[12] else 'SEM FASE'
         kpi_fases_dict[fa] = kpi_fases_dict.get(fa, 0) + 1
@@ -1805,13 +1934,24 @@ def credenciamento_fases():
     c.execute("SELECT DISTINCT filial FROM credenciamento_fases WHERE filial IS NOT NULL AND filial != '' ORDER BY filial")
     lista_ufs = [r[0] for r in c.fetchall()]
     c.execute("SELECT DISTINCT fase FROM credenciamento_fases WHERE fase IS NOT NULL AND fase != '' ORDER BY fase")
-    lista_fases = [r[0] for r in c.fetchall()]
+    fases_banco = [r[0] for r in c.fetchall()]
+    lista_fases = sorted(list(set(FASES_PADRAO_CRED + fases_banco)))
+
     c.execute("SELECT DISTINCT parecer FROM credenciamento_fases WHERE parecer IS NOT NULL AND parecer != '' ORDER BY parecer")
-    lista_pareceres = [r[0] for r in c.fetchall()]
+    pareceres_banco = [r[0] for r in c.fetchall()]
+    lista_pareceres = list(dict.fromkeys(STATUS_CRED + pareceres_banco))
+
     c.execute("SELECT DISTINCT origem_parecer FROM credenciamento_fases WHERE origem_parecer IS NOT NULL AND origem_parecer != '' ORDER BY origem_parecer")
     lista_origens = [r[0] for r in c.fetchall()]
+
+    # Carrega todos os logins cadastrados na tabela users + os que já existem na base
+    c.execute("SELECT username FROM users ORDER BY username ASC")
+    logins_sistema = [r[0] for r in c.fetchall() if r[0]]
     c.execute("SELECT DISTINCT usuario_resp FROM credenciamento_fases WHERE usuario_resp IS NOT NULL AND usuario_resp != '' ORDER BY usuario_resp")
-    lista_resps = [r[0] for r in c.fetchall()]
+    resps_banco = [r[0] for r in c.fetchall() if r[0]]
+    usuarios_login = list(dict.fromkeys(['Nenhum'] + logins_sistema + resps_banco))
+    lista_resps = list(dict.fromkeys(logins_sistema + resps_banco))
+
     c.execute("SELECT MAX(data_atualizacao) FROM credenciamento_fases")
     row_att = c.fetchone()
     ultima_att = row_att[0] if row_att and row_att[0] else None
@@ -1828,12 +1968,79 @@ def credenciamento_fases():
         total_proc_unicos=len(proc_set),
         lista_ufs=lista_ufs,
         lista_fases=lista_fases,
+        opcoes_fases_modal=lista_fases,
+        status_cred_modal=lista_pareceres,
+        usuarios_login=usuarios_login,
         lista_pareceres=lista_pareceres,
         lista_origens=lista_origens,
         lista_resps=lista_resps,
         f_ultima=f_ultima, f_sla=f_sla, f_uf=f_uf, f_fase=f_fase, f_parecer=f_parecer, f_origem=f_origem, f_resp=f_resp, f_busca=f_busca,
         ultima_att=ultima_att
     )
+
+@app.route('/credenciamento/editar', methods=['POST'])
+def editar_credenciamento():
+    if 'user' not in session: return redirect(url_for('login'))
+    c_id = request.form.get('id')
+    nova_fase = request.form.get('fase', '').strip()
+    novo_status = request.form.get('status', '').strip()
+    novo_resp = request.form.get('responsavel', '').strip()
+    nova_origem = request.form.get('origem_parecer', '').strip()
+    nova_obs = request.form.get('observacao', '').strip()
+
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    try:
+        c.execute(f"SELECT fase, data_inicial, data_final FROM credenciamento_fases WHERE id={ph}", (c_id,))
+        atual = c.fetchone()
+        hoje_str = datetime.now().strftime("%d/%m/%Y")
+
+        data_ini = atual[1] if atual else hoje_str
+        data_fim = atual[2] if atual else ""
+
+        # Se mudou de fase, reinicia a data inicial da nova fase para hoje
+        if atual and str(atual[0] or '').strip() != nova_fase:
+            data_ini = hoje_str
+
+        # Se o status for finalizado, devolvido, deferido, indeferido ou cancelado, grava data_final e congela o SLA
+        if novo_status.upper() in STATUS_ENCERRADOS_DEMANDAS:
+            if not data_fim:
+                data_fim = hoje_str
+        else:
+            # Se voltou para Pendente, Em Análise, Aguardando 90 dias ou Aguardando Retorno, limpa data_final para o SLA rodar
+            data_fim = ""
+
+        c.execute(f"""
+            UPDATE credenciamento_fases
+            SET fase={ph}, parecer={ph}, usuario_resp={ph}, origem_parecer={ph}, observacao={ph},
+                data_inicial={ph}, data_final={ph}
+            WHERE id={ph}
+        """, (nova_fase, novo_status, novo_resp, nova_origem, nova_obs, data_ini, data_fim, c_id))
+        conn.commit()
+        flash("Processo de credenciamento atualizado com sucesso!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Erro ao atualizar processo de credenciamento: {e}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('credenciamento_fases'))
+
+@app.route('/credenciamento/acao', methods=['POST'])
+def acao_credenciamento():
+    if 'user' not in session: return redirect(url_for('login'))
+    c_id = request.form.get('id')
+    acao = request.form.get('acao')
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    try:
+        if acao == 'assumir':
+            c.execute(f"UPDATE credenciamento_fases SET usuario_resp={ph}, parecer='Em Análise', data_final='' WHERE id={ph}", (session['user'], c_id))
+            flash(f"Processo assumido por {session['user']}!", "info")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        flash(f"Erro ao executar ação: {e}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('credenciamento_fases'))
 
 @app.route('/credenciamento/upload', methods=['POST'])
 def upload_credenciamento():
@@ -2330,7 +2537,6 @@ def dashboard_graficos():
                 'cor': cores_status.get(st, '#004b87')
             })
     
-    # SLA das Demandas (Rotinas + Avulsas)
     c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
     pendentes_rotina = c.fetchall()
     c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
@@ -2348,7 +2554,6 @@ def dashboard_graficos():
         elif s >= 2: sla_atencao += 1
         else: sla_em_dia += 1
 
-    # Indicadores e SLA de Credenciamento - Fases (Fase Atual = SIM)
     c.execute("SELECT * FROM credenciamento_fases WHERE ultima_fase='SIM'")
     rows_cred_atual = c.fetchall()
     cred_parecer = {}
