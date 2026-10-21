@@ -14,6 +14,7 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta_da_postal_saude'
@@ -135,7 +136,6 @@ def calcular_sla_credenciamento(row):
     data_inicial_fase = row[14]
     data_final_fase = str(row[15] or '').strip()
 
-    # Para o relógio se o status/parecer for encerrado ou devolvido
     parado = False
     if parecer in STATUS_ENCERRADOS_DEMANDAS:
         parado = True
@@ -302,7 +302,7 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
             <div class="card shadow-sm h-100 p-4 border-0">
                 <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1>
                 <h4 class="fw-bold">Dashboard Gerencial</h4>
-                <p class="text-muted mb-4">Painel executivo consolidado de Status, SLAs, Credenciamento e Produtividade.</p>
+                <p class="text-muted mb-4">Painel executivo consolidado de Status, SLAs, Credenciamento e Relatório PDF.</p>
                 <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 fw-bold py-2 mt-auto">Acessar Dashboard</a>
             </div>
         </div>
@@ -320,7 +320,13 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
 
 TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de Demandas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="navbar-text text-white fw-bold">Central de Controle de Demandas</span></div></nav>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a>
+    <span class="navbar-text text-white fw-bold">Central de Controle de Demandas</span>
+    <a href="/demandas/relatorio_pdf" class="btn btn-danger btn-sm fw-bold">📄 Baixar Relatório Geral (PDF)</a>
+  </div>
+</nav>
 <div class="container mt-5 text-center">
     <h2 class="fw-bold mb-4" style="color: #004b87;">SELECIONE A FRENTE OPERACIONAL</h2>
     <div class="row justify-content-center g-4">
@@ -352,7 +358,7 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
             <div class="card shadow-sm border-0 h-100 p-4">
                 <h1 class="mb-3">📊</h1>
                 <h5 class="fw-bold text-secondary">Dashboard Gerencial</h5>
-                <p class="text-muted small mb-4">Visão consolidada das 3 frentes, indicadores de SLA e gráficos.</p>
+                <p class="text-muted small mb-4">Visão consolidada das 3 frentes, indicadores de SLA, gráficos e PDF.</p>
                 <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold mt-auto">Ver Dashboard</a>
             </div>
         </div>
@@ -379,6 +385,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
     <span class="navbar-text text-white fw-bold">📋 Demandas: Credenciamento - Fases {% if ultima_att %}<small class="text-warning ms-2">(Atualizado em: {{ ultima_att }})</small>{% endif %}</span>
     <div class="d-flex gap-2">
         <button class="btn btn-info btn-sm fw-bold text-white" type="button" data-bs-toggle="collapse" data-bs-target="#painelGraficosCred">📊 Mostrar/Ocultar Gráficos</button>
+        <a href="/demandas/relatorio_pdf" class="btn btn-danger btn-sm fw-bold">📄 Relatório Geral (PDF)</a>
         <a href="/credenciamento/exportar?{{ request.query_string.decode('utf-8') }}" class="btn btn-success btn-sm fw-bold">⬇ Exportar Visão (Excel)</a>
     </div>
   </div>
@@ -566,7 +573,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label small fw-bold mb-1">Responsável</label>
+                    <label class="form-label small fw-bold mb-1">Responsável (COCAP)</label>
                     <select name="resp" class="form-select form-select-sm">
                         <option value="Todos">Todos</option>
                         {% for re_ in lista_resps %}<option value="{{re_}}" {% if f_resp == re_ %}selected{% endif %}>{{re_}}</option>{% endfor %}
@@ -712,7 +719,7 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-bold text-primary">Responsável (Login)</label>
+                <label class="form-label fw-bold text-primary">Responsável (Usuários COCAP)</label>
                 <select name="responsavel" id="edit_cred_resp" class="form-select border-primary">
                     {% for u in usuarios_login %}
                     <option value="{{ u }}">{{ u }}</option>
@@ -771,6 +778,11 @@ function selecionarOuCriarOpcao(selectEl, valor) {
     selectEl.value = valor;
 }
 
+function selecionarApenasCadastrados(selectEl, valor) {
+    let existe = Array.from(selectEl.options).some(opt => opt.value === valor);
+    selectEl.value = existe ? valor : 'Nenhum';
+}
+
 function abrirModalEditarCred(btn) {
     document.getElementById('edit_cred_id').value = btn.getAttribute('data-id');
     document.getElementById('lbl_cred_proc').innerText = btn.getAttribute('data-proc') || '-';
@@ -779,7 +791,8 @@ function abrirModalEditarCred(btn) {
 
     selecionarOuCriarOpcao(document.getElementById('edit_cred_fase'), btn.getAttribute('data-fase'));
     selecionarOuCriarOpcao(document.getElementById('edit_cred_status'), btn.getAttribute('data-status'));
-    selecionarOuCriarOpcao(document.getElementById('edit_cred_resp'), btn.getAttribute('data-resp'));
+    // Mantém estritamente os usuários cadastrados na tabela users
+    selecionarApenasCadastrados(document.getElementById('edit_cred_resp'), btn.getAttribute('data-resp'));
     selecionarOuCriarOpcao(document.getElementById('edit_cred_origem'), btn.getAttribute('data-origem'));
 
     let obsBruta = btn.getAttribute('data-obs') || '';
@@ -1243,7 +1256,8 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
         <a href="/demandas" class="btn btn-outline-info btn-sm">📂 Central de Demandas</a>
     </div>
     <span class="text-white fw-bold">📊 Dashboard Gerencial Unificado (PDFs + Avulsas + Credenciamento)</span>
-    <div>
+    <div class="d-flex gap-2">
+        <a href="/demandas/relatorio_pdf" class="btn btn-danger btn-sm fw-bold">📄 Baixar Relatório Geral do Cenário (PDF)</a>
         <a href="/credenciamento" class="btn btn-success btn-sm fw-bold">📋 Ir para Credenciamento - Fases</a>
     </div>
   </div>
@@ -1944,13 +1958,11 @@ def credenciamento_fases():
     c.execute("SELECT DISTINCT origem_parecer FROM credenciamento_fases WHERE origem_parecer IS NOT NULL AND origem_parecer != '' ORDER BY origem_parecer")
     lista_origens = [r[0] for r in c.fetchall()]
 
-    # Carrega todos os logins cadastrados na tabela users + os que já existem na base
-    c.execute("SELECT username FROM users ORDER BY username ASC")
+    # Puxa EXCLUSIVAMENTE os usuários cadastrados na tabela users (Painel Admin)
+    c.execute("SELECT username FROM users ORDER BY id ASC")
     logins_sistema = [r[0] for r in c.fetchall() if r[0]]
-    c.execute("SELECT DISTINCT usuario_resp FROM credenciamento_fases WHERE usuario_resp IS NOT NULL AND usuario_resp != '' ORDER BY usuario_resp")
-    resps_banco = [r[0] for r in c.fetchall() if r[0]]
-    usuarios_login = list(dict.fromkeys(['Nenhum'] + logins_sistema + resps_banco))
-    lista_resps = list(dict.fromkeys(logins_sistema + resps_banco))
+    usuarios_login = ['Nenhum'] + logins_sistema
+    lista_resps = ['Nenhum'] + logins_sistema
 
     c.execute("SELECT MAX(data_atualizacao) FROM credenciamento_fases")
     row_att = c.fetchone()
@@ -1997,16 +2009,13 @@ def editar_credenciamento():
         data_ini = atual[1] if atual else hoje_str
         data_fim = atual[2] if atual else ""
 
-        # Se mudou de fase, reinicia a data inicial da nova fase para hoje
         if atual and str(atual[0] or '').strip() != nova_fase:
             data_ini = hoje_str
 
-        # Se o status for finalizado, devolvido, deferido, indeferido ou cancelado, grava data_final e congela o SLA
         if novo_status.upper() in STATUS_ENCERRADOS_DEMANDAS:
             if not data_fim:
                 data_fim = hoje_str
         else:
-            # Se voltou para Pendente, Em Análise, Aguardando 90 dias ou Aguardando Retorno, limpa data_final para o SLA rodar
             data_fim = ""
 
         c.execute(f"""
@@ -2323,7 +2332,7 @@ def demandas_avulsas():
     if t_filtro != 'Todos': q += f" AND tipo_demanda={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND responsavel={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); demandas = c.fetchall()
-    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
+    c.execute("SELECT username FROM users ORDER BY id ASC"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
     return render_template_string(TELA_AVULSAS, demandas=demandas, tipos=TIPOS_AVULSA, sols=SOLICITANTES, usuarios=usuarios, status_list=STATUS_AVULSA, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla, calc_fechados=calcular_dias_fechados)
 
 @app.route('/demandas/avulsas/editar', methods=['POST'])
@@ -2361,7 +2370,7 @@ def demandas_rotinas():
     if t_filtro != 'Todos': q += f" AND type={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
-    c.execute("SELECT username FROM users"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
+    c.execute("SELECT username FROM users ORDER BY id ASC"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
     return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, status_list=STATUS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla, calc_fechados=calcular_dias_fechados)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
@@ -2597,6 +2606,222 @@ def dashboard_graficos():
         chart_prod=chart_prod, chart_tipo=chart_tipo,
         sla_em_dia=sla_em_dia, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico,
         total_ativas_unificado=total_ativas_unificado
+    )
+
+# -------- GERADOR DE RELATÓRIO EXECUTIVO GERAL EM PDF --------
+@app.route('/demandas/relatorio_pdf')
+def exportar_relatorio_pdf():
+    if 'user' not in session: return redirect(url_for('login'))
+    inicializar_tabela_credenciamento()
+    conn = conectar_db(); c = conn.cursor()
+
+    c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM credenciamento_fases WHERE ultima_fase='SIM'"); t_cred_atual = c.fetchone()[0]
+    d_total_geral = t_rotina + t_avulsa + t_cred_atual
+
+    c.execute("SELECT status, COUNT(*) FROM demands GROUP BY status")
+    rot_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
+    c.execute("SELECT status, COUNT(*) FROM demandas_avulsas GROUP BY status")
+    av_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
+
+    todos_status = list(TODOS_STATUS_ORDEM)
+    for st in list(rot_por_status.keys()) + list(av_por_status.keys()):
+        if st not in todos_status: todos_status.append(st)
+
+    tabela_status_rows = []
+    for st in todos_status:
+        qr = rot_por_status.get(st, 0)
+        qa = av_por_status.get(st, 0)
+        if (qr + qa) > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Concluído']:
+            tabela_status_rows.append([st, str(qr), str(qa), str(qr + qa)])
+
+    c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
+    pend_rot = c.fetchall()
+    c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
+    pend_av = c.fetchall()
+
+    sla_dem = {"no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0}
+    for p in (pend_rot + pend_av):
+        s = calcular_sla(p[0], p[1])
+        if s < 0: continue
+        if s >= 6: sla_dem["critico"] += 1
+        elif s >= 4: sla_dem["urgente"] += 1
+        elif s >= 2: sla_dem["atencao"] += 1
+        else: sla_dem["no_prazo"] += 1
+
+    c.execute("SELECT * FROM credenciamento_fases WHERE ultima_fase='SIM'")
+    rows_cred = c.fetchall()
+    cred_parecer = {}
+    cred_fases_dict = {}
+    sla_cred = {"no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0, "alerta_90d": 0}
+    for rc in rows_cred:
+        par = str(rc[20] or 'SEM PARECER').strip().upper()
+        cred_parecer[par] = cred_parecer.get(par, 0) + 1
+        fa = str(rc[12] or 'SEM FASE').strip()
+        cred_fases_dict[fa] = cred_fases_dict.get(fa, 0) + 1
+        info_c = calcular_sla_credenciamento(rc)
+        if info_c["ativo"]:
+            if info_c["faixa_sla"] == "Crítico": sla_cred["critico"] += 1
+            elif info_c["faixa_sla"] == "Urgente": sla_cred["urgente"] += 1
+            elif info_c["faixa_sla"] == "Atenção": sla_cred["atencao"] += 1
+            else: sla_cred["no_prazo"] += 1
+            if info_c["estourou_90d"]: sla_cred["alerta_90d"] += 1
+
+    c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to ORDER BY COUNT(*) DESC")
+    dados_prod = c.fetchall()
+
+    c.execute("SELECT type, COUNT(*) FROM demands GROUP BY type ORDER BY COUNT(*) DESC")
+    dados_tipo = c.fetchall()
+    conn.close()
+
+    pdf_buffer = BytesIO()
+    dt_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    with PdfPages(pdf_buffer) as pdf:
+        # ==========================================================
+        # PÁGINA 1: RESUMO EXECUTIVO E MONITORAMENTO DE SLA
+        # ==========================================================
+        fig1 = plt.figure(figsize=(11.69, 8.27))
+        fig1.patch.set_facecolor('#ffffff')
+
+        fig1.text(0.04, 0.94, "POSTAL SAÚDE - CENTRAL DE OPERAÇÕES (COCAP)", fontsize=16, fontweight='bold', color='#004b87')
+        fig1.text(0.04, 0.91, f"Relatório Executivo Geral do Cenário Operacional | Emitido em: {dt_emissao} por {session.get('user', 'Sistema')}", fontsize=10, color='#555555')
+
+        # 1. Tabela de Indicadores Gerais (KPIs das 3 Frentes)
+        ax_kpi = fig1.add_axes([0.04, 0.77, 0.92, 0.11])
+        ax_kpi.axis('off')
+        ax_kpi.set_title("1. Volume Consolidado das 3 Frentes Operacionais", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=6)
+        kpi_data = [[
+            f"{d_total_geral}",
+            f"{t_rotina}",
+            f"{t_avulsa}",
+            f"{t_cred_atual}"
+        ]]
+        kpi_cols = ["TOTAL GERAL CONSOLIDADO", "1. Rotinas (PDFs)", "2. Demandas Avulsas", "3. Credenciamento (Fase Atual)"]
+        t1 = ax_kpi.table(cellText=kpi_data, colLabels=kpi_cols, loc='center', cellLoc='center')
+        t1.auto_set_font_size(False); t1.set_fontsize(11); t1.scale(1, 2.0)
+        for (row_i, col_i), cell in t1.get_celld().items():
+            if row_i == 0:
+                cell.set_facecolor('#004b87'); cell.set_text_props(color='white', fontweight='bold', fontsize=9.5)
+            else:
+                cell.set_facecolor('#f0f4f8'); cell.set_text_props(fontweight='bold', fontsize=13, color='#002060')
+
+        # 2. Tabela Completa por Status (PDFs + Avulsas)
+        ax_st = fig1.add_axes([0.04, 0.10, 0.46, 0.60])
+        ax_st.axis('off')
+        ax_st.set_title("2. Contagem Detalhada por Status (PDFs + Avulsas)", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=8)
+        if tabela_status_rows:
+            t_st = ax_st.table(cellText=tabela_status_rows, colLabels=["Status da Demanda", "PDFs", "Avulsas", "Total"], loc='upper center', cellLoc='center', colWidths=[0.46, 0.18, 0.18, 0.18])
+            t_st.auto_set_font_size(False); t_st.set_fontsize(9); t_st.scale(1, 1.55)
+            for (r_i, c_i), cell in t_st.get_celld().items():
+                if r_i == 0:
+                    cell.set_facecolor('#333333'); cell.set_text_props(color='white', fontweight='bold')
+                elif r_i % 2 == 0:
+                    cell.set_facecolor('#f8f9fa')
+
+        # 3. Gráfico de Monitoramento Unificado de SLA
+        ax_sla = fig1.add_axes([0.56, 0.43, 0.40, 0.27])
+        categorias_sla = ["No Prazo\n(0-1d)", "Atenção\n(2-3d)", "Urgente\n(4-5d)", "Crítico\n(6+d)"]
+        vals_dem = [sla_dem["no_prazo"], sla_dem["atencao"], sla_dem["urgente"], sla_dem["critico"]]
+        vals_crd = [sla_cred["no_prazo"], sla_cred["atencao"], sla_cred["urgente"], sla_cred["critico"]]
+        x_pos = range(len(categorias_sla))
+        ax_sla.bar(x_pos, vals_dem, label='Demandas (PDF/Avulsa)', color='#0275d8', width=0.5)
+        ax_sla.bar(x_pos, vals_crd, bottom=vals_dem, label='Credenciamento (Ativos)', color='#fd7e14', width=0.5)
+        ax_sla.set_xticks(list(x_pos)); ax_sla.set_xticklabels(categorias_sla, fontsize=8.5)
+        ax_sla.set_title("3. Fila Ativa por Faixa de SLA (Unificado)", fontsize=11, fontweight='bold', color='#004b87')
+        ax_sla.legend(fontsize=8)
+        ax_sla.grid(axis='y', linestyle='--', alpha=0.4)
+
+        # 4. Tabela Resumo de SLA e Credenciamento na Página 1
+        ax_res_sla = fig1.add_axes([0.56, 0.08, 0.40, 0.27])
+        ax_res_sla.axis('off')
+        ax_res_sla.set_title("4. Detalhamento da Fila de SLA (Em Aberto)", fontsize=10.5, fontweight='bold', loc='left', color='#004b87', pad=6)
+        rows_sla_tb = [
+            ["No Prazo (0 a 1 dia)", str(sla_dem["no_prazo"]), str(sla_cred["no_prazo"]), str(sla_dem["no_prazo"] + sla_cred["no_prazo"])],
+            ["Atenção (2 a 3 dias)", str(sla_dem["atencao"]), str(sla_cred["atencao"]), str(sla_dem["atencao"] + sla_cred["atencao"])],
+            ["Urgente (4 a 5 dias)", str(sla_dem["urgente"]), str(sla_cred["urgente"]), str(sla_dem["urgente"] + sla_cred["urgente"])],
+            ["Crítico (6+ dias)", str(sla_dem["critico"]), str(sla_cred["critico"]), str(sla_dem["critico"] + sla_cred["critico"])],
+            ["Alerta > 90 Dias (Geral)", "-", str(sla_cred["alerta_90d"]), str(sla_cred["alerta_90d"])]
+        ]
+        t_sla = ax_res_sla.table(cellText=rows_sla_tb, colLabels=["Faixa de SLA", "Demandas", "Credenc.", "Total"], loc='upper center', cellLoc='center', colWidths=[0.46, 0.18, 0.18, 0.18])
+        t_sla.auto_set_font_size(False); t_sla.set_fontsize(8.5); t_sla.scale(1, 1.45)
+        cores_linhas_sla = ['#e2e3e5', '#fff3cd', '#ffe8cc', '#f8d7da', '#e8d9f8']
+        for (r_i, c_i), cell in t_sla.get_celld().items():
+            if r_i == 0:
+                cell.set_facecolor('#333333'); cell.set_text_props(color='white', fontweight='bold')
+            else:
+                cell.set_facecolor(cores_linhas_sla[r_i - 1])
+
+        pdf.savefig(fig1)
+        plt.close(fig1)
+
+        # ==========================================================
+        # PÁGINA 2: PRODUTIVIDADE E CENÁRIO DO CREDENCIAMENTO - FASES
+        # ==========================================================
+        fig2 = plt.figure(figsize=(11.69, 8.27))
+        fig2.patch.set_facecolor('#ffffff')
+
+        fig2.text(0.04, 0.94, "POSTAL SAÚDE - PRODUTIVIDADE & CREDENCIAMENTO EM FASES", fontsize=15, fontweight='bold', color='#004b87')
+        fig2.text(0.04, 0.91, f"Página 2 - Análise de Produtividade, Tipos de Demanda e Pipeline de Credenciamento ({dt_emissao})", fontsize=9.5, color='#555555')
+
+        # Gráfico 1: Produtividade por Colaborador
+        ax_p1 = fig2.add_axes([0.06, 0.54, 0.41, 0.31])
+        if dados_prod:
+            nomes_p = [str(r[0]) for r in dados_prod]
+            vals_p = [r[1] for r in dados_prod]
+            ax_p1.bar(nomes_p, vals_p, color='#198754')
+            ax_p1.set_xticklabels(nomes_p, rotation=30, ha='right', fontsize=8)
+        else:
+            ax_p1.text(0.5, 0.5, "Sem dados de demandas finalizadas", ha='center', va='center')
+        ax_p1.set_title("5. Produtividade por Colaborador (Rotinas Finalizadas)", fontsize=10.5, fontweight='bold', color='#004b87')
+        ax_p1.grid(axis='y', linestyle='--', alpha=0.4)
+
+        # Gráfico 2: Distribuição por Tipo de Demanda
+        ax_p2 = fig2.add_axes([0.55, 0.54, 0.41, 0.31])
+        if dados_tipo:
+            nomes_t = [str(r[0]) for r in dados_tipo]
+            vals_t = [r[1] for r in dados_tipo]
+            ax_p2.bar(nomes_t, vals_t, color='#008CBA')
+            ax_p2.set_xticklabels(nomes_t, rotation=30, ha='right', fontsize=8)
+        else:
+            ax_p2.text(0.5, 0.5, "Sem dados por tipo", ha='center', va='center')
+        ax_p2.set_title("6. Volume por Tipo de Demanda (Rotinas)", fontsize=10.5, fontweight='bold', color='#004b87')
+        ax_p2.grid(axis='y', linestyle='--', alpha=0.4)
+
+        # Tabela de Fases do Credenciamento (Fase Atual = SIM)
+        ax_cf = fig2.add_axes([0.04, 0.06, 0.92, 0.38])
+        ax_cf.axis('off')
+        em_ana_c = cred_parecer.get('EM ANÁLISE', 0) + cred_parecer.get('EM ANALISE', 0) + cred_parecer.get('PENDENTE', 0)
+        def_c = cred_parecer.get('DEFERIDO', 0) + cred_parecer.get('FINALIZADA', 0)
+        dev_c = cred_parecer.get('DEVOLVIDO', 0)
+        ind_c = cred_parecer.get('INDEFERIDO', 0)
+        ax_cf.set_title(
+            f"7. Pipeline de Credenciamento - Fases Atuais (Em Análise: {em_ana_c} | Deferidos: {def_c} | Devolvidos: {dev_c} | Indeferidos: {ind_c})",
+            fontsize=10.5, fontweight='bold', loc='left', color='#004b87', pad=8
+        )
+        fases_ordenadas = sorted(cred_fases_dict.items(), key=lambda x: x[0])
+        if fases_ordenadas:
+            rows_fases = [[f_n, str(f_q)] for f_n, f_q in fases_ordenadas]
+            t_cf = ax_cf.table(cellText=rows_fases, colLabels=["Fase Atual do Processo (ULTIMAFASE = SIM)", "Qtd. Processos"], loc='upper center', cellLoc='left', colWidths=[0.80, 0.20])
+            t_cf.auto_set_font_size(False); t_cf.set_fontsize(8.5); t_cf.scale(1, 1.35)
+            for (r_i, c_i), cell in t_cf.get_celld().items():
+                if r_i == 0:
+                    cell.set_facecolor('#004b87'); cell.set_text_props(color='white', fontweight='bold')
+                elif r_i % 2 == 0:
+                    cell.set_facecolor('#f8f9fa')
+        else:
+            ax_cf.text(0.5, 0.5, "Nenhum registro carregado no módulo Credenciamento - Fases.", ha='center', va='center', fontsize=10, color='#777777')
+
+        pdf.savefig(fig2)
+        plt.close(fig2)
+
+    pdf_buffer.seek(0)
+    return send_file(
+        pdf_buffer,
+        download_name=f"Relatorio_Executivo_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.pdf",
+        as_attachment=True,
+        mimetype='application/pdf'
     )
 
 @app.route('/pentefino')
