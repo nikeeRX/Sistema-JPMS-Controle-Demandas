@@ -791,7 +791,6 @@ function abrirModalEditarCred(btn) {
 
     selecionarOuCriarOpcao(document.getElementById('edit_cred_fase'), btn.getAttribute('data-fase'));
     selecionarOuCriarOpcao(document.getElementById('edit_cred_status'), btn.getAttribute('data-status'));
-    // Mantém estritamente os usuários cadastrados na tabela users
     selecionarApenasCadastrados(document.getElementById('edit_cred_resp'), btn.getAttribute('data-resp'));
     selecionarOuCriarOpcao(document.getElementById('edit_cred_origem'), btn.getAttribute('data-origem'));
 
@@ -1687,19 +1686,26 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
 
 
 # ==========================================
-# FUNÇÕES DE APOIO PENTE FINO E ARQUIVOS
+# FUNÇÕES DE APOIO PENTE FINO E ARQUIVOS (BLINDADAS)
 # ==========================================
 def normalizar_texto(texto):
     if pd.isna(texto) or str(texto).lower() in ['nan', 'none', '']: return ""
-    return ''.join(c for c in unicodedata.normalize('NFD', str(texto)) if unicodedata.category(c) != 'Mn').upper().strip()
+    t_limpo = corrigir_encoding_postal(str(texto))
+    return ''.join(c for c in unicodedata.normalize('NFD', t_limpo) if unicodedata.category(c) != 'Mn').upper().strip()
 
 def cacador_de_colunas(df, palavras_chave):
+    # 1ª Passada: Busca exata ignorando acentos e codificação
     for k in palavras_chave:
+        k_norm = normalizar_texto(k)
         for col in df.columns:
-            if k == str(col).strip().upper(): return col
+            if k_norm == normalizar_texto(col):
+                return col
+    # 2ª Passada: Busca por contenção ignorando acentos e codificação
     for k in palavras_chave:
+        k_norm = normalizar_texto(k)
         for col in df.columns:
-            if k in str(col).strip().upper(): return col
+            if k_norm in normalizar_texto(col):
+                return col
     return None
 
 def limpar_ibge(val):
@@ -1723,11 +1729,17 @@ def ler_arquivo(file_obj, nrows=None):
         raw_bytes = file_obj.read()
         file_obj.seek(0)
         
+        # Para arquivos .csv (como pop_ibge.csv), prioriza utf-8 e latin1/cp1252
+        # Para arquivos .txt (como POSTAL191.txt), prioriza utf-8 e cp1250
+        if filename.endswith('.csv'):
+            ordem_enc = ['utf-8-sig', 'utf-8', 'latin1', 'cp1252', 'cp1250']
+        else:
+            ordem_enc = ['utf-8-sig', 'utf-8', 'cp1250', 'iso-8859-2', 'latin1', 'cp1252']
+
         texto_decodificado = None
-        for enc in ['utf-8-sig', 'utf-8', 'cp1250', 'iso-8859-2', 'cp1252', 'latin1']:
+        for enc in ordem_enc:
             try:
-                t = raw_bytes.decode(enc)
-                texto_decodificado = t
+                texto_decodificado = raw_bytes.decode(enc)
                 break
             except Exception:
                 continue
@@ -1739,25 +1751,19 @@ def ler_arquivo(file_obj, nrows=None):
             return pd.DataFrame()
             
         primeira_linha = linhas[0]
-        
         m_sep = re.search(r'FILIALPADRAO(.+?)CNPJCPF', primeira_linha, re.IGNORECASE)
-        if m_sep:
-            sep = m_sep.group(1)
-        elif 'Ź' in primeira_linha:
-            sep = 'Ź'
-        elif '\x8f' in primeira_linha:
-            sep = '\x8f'
-        elif ';' in primeira_linha:
-            sep = ';'
-        elif '|' in primeira_linha:
-            sep = '|'
-        elif '\t' in primeira_linha:
-            sep = '\t'
-        else:
-            sep = ','
 
-        if m_sep or sep in ['Ź', '\x8f'] or filename.endswith('.txt'):
-            cabecalhos = [c.strip() for c in primeira_linha.split(sep)]
+        # Se for relatório POSTAL191 ou TXT com delimitador especial, usa o parser linha a linha imune a ';'
+        if m_sep or 'Ź' in primeira_linha or '\x8f' in primeira_linha or filename.endswith('.txt'):
+            if m_sep: sep = m_sep.group(1)
+            elif 'Ź' in primeira_linha: sep = 'Ź'
+            elif '\x8f' in primeira_linha: sep = '\x8f'
+            elif ';' in primeira_linha: sep = ';'
+            elif '|' in primeira_linha: sep = '|'
+            elif '\t' in primeira_linha: sep = '\t'
+            else: sep = ','
+
+            cabecalhos = [corrigir_encoding_postal(c).strip() for c in primeira_linha.split(sep)]
             while cabecalhos and cabecalhos[-1] == '':
                 cabecalhos.pop()
             num_cols = len(cabecalhos)
@@ -1772,14 +1778,16 @@ def ler_arquivo(file_obj, nrows=None):
                 dados.append(partes)
             return pd.DataFrame(dados, columns=cabecalhos, dtype=str)
 
-        import csv
+        # Leitura padrão para CSV (pop_ibge.csv, etc.)
+        sep = ';' if ';' in primeira_linha else (',' if ',' in primeira_linha else '\t')
         from io import StringIO
-        try:
-            return pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, engine='python', on_bad_lines='skip')
-        except Exception:
-            return pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, engine='python', quoting=csv.QUOTE_NONE, on_bad_lines='skip')
+        df_csv = pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, on_bad_lines='skip')
+        df_csv.columns = [corrigir_encoding_postal(c).strip() for c in df_csv.columns]
+        return df_csv
     else:
-        return pd.read_excel(file_obj, dtype=str, nrows=nrows)
+        df_xl = pd.read_excel(file_obj, dtype=str, nrows=nrows)
+        df_xl.columns = [corrigir_encoding_postal(c).strip() for c in df_xl.columns]
+        return df_xl
 
 
 # ==========================================
@@ -1958,7 +1966,6 @@ def credenciamento_fases():
     c.execute("SELECT DISTINCT origem_parecer FROM credenciamento_fases WHERE origem_parecer IS NOT NULL AND origem_parecer != '' ORDER BY origem_parecer")
     lista_origens = [r[0] for r in c.fetchall()]
 
-    # Puxa EXCLUSIVAMENTE os usuários cadastrados na tabela users (Painel Admin)
     c.execute("SELECT username FROM users ORDER BY id ASC")
     logins_sistema = [r[0] for r in c.fetchall() if r[0]]
     usuarios_login = ['Nenhum'] + logins_sistema
@@ -2679,25 +2686,16 @@ def exportar_relatorio_pdf():
     dt_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     with PdfPages(pdf_buffer) as pdf:
-        # ==========================================================
-        # PÁGINA 1: RESUMO EXECUTIVO E MONITORAMENTO DE SLA
-        # ==========================================================
         fig1 = plt.figure(figsize=(11.69, 8.27))
         fig1.patch.set_facecolor('#ffffff')
 
         fig1.text(0.04, 0.94, "POSTAL SAÚDE - CENTRAL DE OPERAÇÕES (COCAP)", fontsize=16, fontweight='bold', color='#004b87')
         fig1.text(0.04, 0.91, f"Relatório Executivo Geral do Cenário Operacional | Emitido em: {dt_emissao} por {session.get('user', 'Sistema')}", fontsize=10, color='#555555')
 
-        # 1. Tabela de Indicadores Gerais (KPIs das 3 Frentes)
         ax_kpi = fig1.add_axes([0.04, 0.77, 0.92, 0.11])
         ax_kpi.axis('off')
         ax_kpi.set_title("1. Volume Consolidado das 3 Frentes Operacionais", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=6)
-        kpi_data = [[
-            f"{d_total_geral}",
-            f"{t_rotina}",
-            f"{t_avulsa}",
-            f"{t_cred_atual}"
-        ]]
+        kpi_data = [[f"{d_total_geral}", f"{t_rotina}", f"{t_avulsa}", f"{t_cred_atual}"]]
         kpi_cols = ["TOTAL GERAL CONSOLIDADO", "1. Rotinas (PDFs)", "2. Demandas Avulsas", "3. Credenciamento (Fase Atual)"]
         t1 = ax_kpi.table(cellText=kpi_data, colLabels=kpi_cols, loc='center', cellLoc='center')
         t1.auto_set_font_size(False); t1.set_fontsize(11); t1.scale(1, 2.0)
@@ -2707,7 +2705,6 @@ def exportar_relatorio_pdf():
             else:
                 cell.set_facecolor('#f0f4f8'); cell.set_text_props(fontweight='bold', fontsize=13, color='#002060')
 
-        # 2. Tabela Completa por Status (PDFs + Avulsas)
         ax_st = fig1.add_axes([0.04, 0.10, 0.46, 0.60])
         ax_st.axis('off')
         ax_st.set_title("2. Contagem Detalhada por Status (PDFs + Avulsas)", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=8)
@@ -2720,7 +2717,6 @@ def exportar_relatorio_pdf():
                 elif r_i % 2 == 0:
                     cell.set_facecolor('#f8f9fa')
 
-        # 3. Gráfico de Monitoramento Unificado de SLA
         ax_sla = fig1.add_axes([0.56, 0.43, 0.40, 0.27])
         categorias_sla = ["No Prazo\n(0-1d)", "Atenção\n(2-3d)", "Urgente\n(4-5d)", "Crítico\n(6+d)"]
         vals_dem = [sla_dem["no_prazo"], sla_dem["atencao"], sla_dem["urgente"], sla_dem["critico"]]
@@ -2733,7 +2729,6 @@ def exportar_relatorio_pdf():
         ax_sla.legend(fontsize=8)
         ax_sla.grid(axis='y', linestyle='--', alpha=0.4)
 
-        # 4. Tabela Resumo de SLA e Credenciamento na Página 1
         ax_res_sla = fig1.add_axes([0.56, 0.08, 0.40, 0.27])
         ax_res_sla.axis('off')
         ax_res_sla.set_title("4. Detalhamento da Fila de SLA (Em Aberto)", fontsize=10.5, fontweight='bold', loc='left', color='#004b87', pad=6)
@@ -2756,16 +2751,12 @@ def exportar_relatorio_pdf():
         pdf.savefig(fig1)
         plt.close(fig1)
 
-        # ==========================================================
-        # PÁGINA 2: PRODUTIVIDADE E CENÁRIO DO CREDENCIAMENTO - FASES
-        # ==========================================================
         fig2 = plt.figure(figsize=(11.69, 8.27))
         fig2.patch.set_facecolor('#ffffff')
 
         fig2.text(0.04, 0.94, "POSTAL SAÚDE - PRODUTIVIDADE & CREDENCIAMENTO EM FASES", fontsize=15, fontweight='bold', color='#004b87')
         fig2.text(0.04, 0.91, f"Página 2 - Análise de Produtividade, Tipos de Demanda e Pipeline de Credenciamento ({dt_emissao})", fontsize=9.5, color='#555555')
 
-        # Gráfico 1: Produtividade por Colaborador
         ax_p1 = fig2.add_axes([0.06, 0.54, 0.41, 0.31])
         if dados_prod:
             nomes_p = [str(r[0]) for r in dados_prod]
@@ -2777,7 +2768,6 @@ def exportar_relatorio_pdf():
         ax_p1.set_title("5. Produtividade por Colaborador (Rotinas Finalizadas)", fontsize=10.5, fontweight='bold', color='#004b87')
         ax_p1.grid(axis='y', linestyle='--', alpha=0.4)
 
-        # Gráfico 2: Distribuição por Tipo de Demanda
         ax_p2 = fig2.add_axes([0.55, 0.54, 0.41, 0.31])
         if dados_tipo:
             nomes_t = [str(r[0]) for r in dados_tipo]
@@ -2789,7 +2779,6 @@ def exportar_relatorio_pdf():
         ax_p2.set_title("6. Volume por Tipo de Demanda (Rotinas)", fontsize=10.5, fontweight='bold', color='#004b87')
         ax_p2.grid(axis='y', linestyle='--', alpha=0.4)
 
-        # Tabela de Fases do Credenciamento (Fase Atual = SIM)
         ax_cf = fig2.add_axes([0.04, 0.06, 0.92, 0.38])
         ax_cf.axis('off')
         em_ana_c = cred_parecer.get('EM ANÁLISE', 0) + cred_parecer.get('EM ANALISE', 0) + cred_parecer.get('PENDENTE', 0)
@@ -2843,23 +2832,27 @@ def pentefino_regional():
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
         col_ibge_7 = cacador_de_colunas(df_ibge, ['CD_MUNICIPIO', 'COMPLETO', 'IBGE'])
-        col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
-        c_regiao = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIÃO DE SAÚDE', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE', 'REGIÃO'])
-        col_mun_csv = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        col_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'COD. MUNIC', 'CODIGO MUNICIPIO'])
+        c_regiao = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIAO DE SAUDE', 'NOME DA REGIAO DE SAUDE', 'REGIAO'])
+        col_mun_csv = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICIPIO', 'NOME DO MUNICIPIO', 'CIDADE'])
         col_uf_csv = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
 
         map_ibge_regiao = {}
-        if col_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_7].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
-        if col_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_6].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
-        df_ibge['CHAVE_GEO'] = df_ibge[col_mun_csv].apply(normalizar_texto) + "_" + df_ibge[col_uf_csv].apply(normalizar_texto)
-        map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else "")))
+        if c_regiao:
+            if col_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_7].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
+            if col_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[col_ibge_6].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
+
+        map_geo_regiao = {}
+        if col_mun_csv and col_uf_csv and c_regiao:
+            df_ibge['CHAVE_GEO'] = df_ibge[col_mun_csv].apply(normalizar_texto) + "_" + df_ibge[col_uf_csv].apply(normalizar_texto)
+            map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else "")))
 
         dics_processados = []
         for df in [df_postal, df_operadora]:
-            col_ibge = cacador_de_colunas(df, ['IBGE', 'CÓDIGO IBGE']); col_mun = cacador_de_colunas(df, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']); col_uf = cacador_de_colunas(df, ['UF', 'ESTADO'])
-            if col_ibge: df['REG_IBGE'] = df[col_ibge].apply(limpar_ibge).map(map_ibge_regiao)
+            col_ibge = cacador_de_colunas(df, ['IBGE', 'CODIGO IBGE']); col_mun = cacador_de_colunas(df, ['MUNICIPIO', 'CIDADE']); col_uf = cacador_de_colunas(df, ['UF', 'ESTADO'])
+            if col_ibge and map_ibge_regiao: df['REG_IBGE'] = df[col_ibge].apply(limpar_ibge).map(map_ibge_regiao)
             else: df['REG_IBGE'] = None
-            if col_mun and col_uf: df['REG_GEO'] = (df[col_mun].apply(normalizar_texto) + "_" + df[col_uf].apply(normalizar_texto)).map(map_geo_regiao)
+            if col_mun and col_uf and map_geo_regiao: df['REG_GEO'] = (df[col_mun].apply(normalizar_texto) + "_" + df[col_uf].apply(normalizar_texto)).map(map_geo_regiao)
             else: df['REG_GEO'] = None
             df['REGIAO_SAUDE'] = df['REG_IBGE'].fillna(df['REG_GEO']).fillna("REGIÃO NÃO IDENTIFICADA")
             dics_processados.append(df)
@@ -2873,7 +2866,7 @@ def pentefino_regional():
 
         col_cnpj_pos = cacador_de_colunas(df_postal, ['CNPJ', 'CPFCNPJ'])
         col_nome_pos = cacador_de_colunas(df_postal, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
-        col_mun_pos = cacador_de_colunas(df_postal, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        col_mun_pos = cacador_de_colunas(df_postal, ['MUNICIPIO', 'CIDADE'])
         
         col_esp_pos = v_esp_pos if v_esp_pos in df_postal.columns else cacador_de_colunas(df_postal, ['ESPECIALIDADE', 'ESPECIALIDADES'])
         col_tipo_pos = v_tipo_pos if v_tipo_pos in df_postal.columns else cacador_de_colunas(df_postal, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO'])
@@ -2887,7 +2880,10 @@ def pentefino_regional():
         dict_agg = {}
         if col_esp_pos: dict_agg[col_esp_pos] = lambda s: ", ".join(sorted(list(extrair_especialidades(s))))
         if col_tipo_pos: dict_agg[col_tipo_pos] = lambda x: " | ".join(x.dropna().astype(str).unique())
-        df_postal_agrupado = df_postal.groupby(['REGIAO_SAUDE', 'CNPJ_LIMPO', col_nome_pos, col_mun_pos], dropna=False).agg(dict_agg).reset_index()
+        if dict_agg:
+            df_postal_agrupado = df_postal.groupby(['REGIAO_SAUDE', 'CNPJ_LIMPO', col_nome_pos, col_mun_pos], dropna=False).agg(dict_agg).reset_index()
+        else:
+            df_postal_agrupado = df_postal.drop_duplicates(subset=['REGIAO_SAUDE', 'CNPJ_LIMPO']).copy()
 
         regioes_operadora = set(df_operadora['REGIAO_SAUDE'].dropna().unique())
         regioes_operadora.discard("REGIÃO NÃO IDENTIFICADA")
@@ -2954,24 +2950,37 @@ def pentefino_individual():
         df_ind.columns = [str(c).strip().upper() for c in df_ind.columns]
         df_ibge.columns = [str(c).strip().upper() for c in df_ibge.columns]
 
-        col_cnpj_ind = cacador_de_colunas(df_ind, ['CNPJ', 'CPFCNPJ'])
+        col_cnpj_ind = cacador_de_colunas(df_ind, ['CNPJ', 'CPFCNPJ', 'CPF'])
         col_nome_ind = cacador_de_colunas(df_ind, ['NOME', 'RAZAO', 'PRESTADOR', 'FANTASIA'])
-        col_mun_ind = cacador_de_colunas(df_ind, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        col_mun_ind = cacador_de_colunas(df_ind, ['MUNICIPIO', 'CIDADE'])
         col_uf_ind = cacador_de_colunas(df_ind, ['UF', 'ESTADO'])
         col_tipo_ind = cacador_de_colunas(df_ind, ['TIPOPRESTADOR', 'TIPO_PRESTADOR', 'TIPO PRESTADOR', 'TIPO', 'CATEGORIA', 'TIPO DE PRESTADOR'])
         col_esp_ind = cacador_de_colunas(df_ind, ['ESPECIALIDADE', 'ESPECIALIDADES'])
-        col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CÓDIGO IBGE'])
+        col_ibge_ind = cacador_de_colunas(df_ind, ['IBGE', 'CODIGO IBGE'])
         
-        if not col_cnpj_ind or not col_nome_ind: flash("Colunas básicas não encontradas.", "danger"); return redirect(url_for('pentefino_individual'))
+        if not col_cnpj_ind or not col_nome_ind:
+            flash("Colunas básicas de CNPJ ou Nome não encontradas na planilha da Postal.", "danger")
+            return redirect(url_for('pentefino_individual'))
             
         df_ind[col_cnpj_ind] = df_ind[col_cnpj_ind].astype(str).str.replace(r'\D', '', regex=True)
         
-        alvo_numeros = re.sub(r'\D', '', alvo_bruto)
-        mask = df_ind[col_nome_ind].fillna('').astype(str).str.upper().str.contains(alvo_bruto, na=False, regex=False)
-        if len(alvo_numeros) > 3: mask = mask | (df_ind[col_cnpj_ind].str.contains(alvo_numeros, na=False, regex=False))
+        # Se o usuário selecionou da lista no formato "CNPJ - NOME", separa os termos para busca exata
+        if ' - ' in alvo_bruto:
+            partes_alvo = alvo_bruto.split(' - ', 1)
+            cnpj_busca = re.sub(r'\D', '', partes_alvo[0])
+            nome_busca = partes_alvo[1].strip()
+        else:
+            cnpj_busca = re.sub(r'\D', '', alvo_bruto)
+            nome_busca = alvo_bruto
+
+        mask = df_ind[col_nome_ind].fillna('').astype(str).str.upper().str.contains(nome_busca, na=False, regex=False)
+        if len(cnpj_busca) > 3:
+            mask = mask | (df_ind[col_cnpj_ind].str.contains(cnpj_busca, na=False, regex=False))
         
         linhas_alvo = df_ind[mask]
-        if linhas_alvo.empty: flash(f"O Alvo '{alvo_bruto}' não foi encontrado na base.", "danger"); return redirect(url_for('pentefino_individual'))
+        if linhas_alvo.empty:
+            flash(f"O Alvo '{alvo_bruto}' não foi encontrado na base.", "danger")
+            return redirect(url_for('pentefino_individual'))
             
         row_alvo = linhas_alvo.iloc[0]
         cnpj_alvo = str(row_alvo.get(col_cnpj_ind, '')).strip()
@@ -2981,24 +2990,33 @@ def pentefino_individual():
         if col_esp_ind: dict_agg[col_esp_ind] = lambda s: ", ".join(sorted(list(extrair_especialidades(s))))
         if col_tipo_ind: dict_agg[col_tipo_ind] = lambda x: " | ".join(x.dropna().astype(str).unique())
         group_cols = [c for c in [col_cnpj_ind, col_nome_ind, col_mun_ind, col_uf_ind, col_ibge_ind] if c]
-        df_ind = df_ind.groupby(group_cols, dropna=False).agg(dict_agg).reset_index()
+        if dict_agg and group_cols:
+            df_ind = df_ind.groupby(group_cols, dropna=False).agg(dict_agg).reset_index()
 
         c_ibge_7 = cacador_de_colunas(df_ibge, ['CD_MUNICIPIO', 'COMPLETO', 'IBGE'])
-        c_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'CÓD. MUNIC'])
-        c_regiao = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIÃO DE SAÚDE', 'REGIAO DE SAUDE', 'NOME DA REGIÃO DE SAÚDE', 'REGIÃO'])
-        c_mun = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICÍPIO', 'MUNICIPIO', 'CIDADE'])
+        c_ibge_6 = cacador_de_colunas(df_ibge, ['AJUSTADO', 'COD. MUNIC', 'CODIGO MUNICIPIO'])
+        c_regiao = cacador_de_colunas(df_ibge, ['NM_REGIAO_SAUDE', 'REGIAO DE SAUDE', 'NOME DA REGIAO DE SAUDE', 'REGIAO'])
+        c_mun = cacador_de_colunas(df_ibge, ['NM_MUNICIPIO', 'MUNICIPIO', 'NOME DO MUNICIPIO', 'CIDADE'])
         c_uf = cacador_de_colunas(df_ibge, ['SG_UF', 'UF', 'ESTADO'])
+
+        if not c_regiao:
+            flash(f"Coluna de Região de Saúde não encontrada na Base IBGE. Colunas lidas: {list(df_ibge.columns)}", "danger")
+            return redirect(url_for('pentefino_individual'))
 
         map_ibge_regiao = {}
         if c_ibge_7: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_7].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
         if c_ibge_6: map_ibge_regiao.update(dict(zip(df_ibge[c_ibge_6].apply(limpar_ibge), df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else ""))))
-        df_ibge['CHAVE_GEO'] = df_ibge[c_mun].apply(normalizar_texto) + "_" + df_ibge[c_uf].apply(normalizar_texto)
-        map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else "")))
+
+        map_geo_regiao = {}
+        if c_mun and c_uf:
+            df_ibge['CHAVE_GEO'] = df_ibge[c_mun].apply(normalizar_texto) + "_" + df_ibge[c_uf].apply(normalizar_texto)
+            map_geo_regiao = dict(zip(df_ibge['CHAVE_GEO'], df_ibge[c_regiao].apply(lambda x: str(x).strip().upper() if pd.notna(x) else "")))
 
         linhas_alvo_agrupadas = df_ind[df_ind[col_cnpj_ind] == cnpj_alvo]
         if not linhas_alvo_agrupadas.empty: row_alvo = linhas_alvo_agrupadas.iloc[0]
 
-        mun_alvo = str(row_alvo.get(col_mun_ind, '')).strip().upper(); uf_alvo = str(row_alvo.get(col_uf_ind, '')).strip().upper()
+        mun_alvo = str(row_alvo.get(col_mun_ind, '')).strip().upper() if col_mun_ind else ""
+        uf_alvo = str(row_alvo.get(col_uf_ind, '')).strip().upper() if col_uf_ind else ""
         chave_geo_alvo = normalizar_texto(mun_alvo) + "_" + normalizar_texto(uf_alvo)
         tipo_alvo = str(row_alvo.get(col_tipo_ind, '')).strip().upper() if col_tipo_ind else ""
         
@@ -3007,7 +3025,7 @@ def pentefino_individual():
         if ibge_alvo and str(ibge_alvo).upper() not in ['NAN', 'NONE', 'NULL', '']: regiao_alvo = map_ibge_regiao.get(limpar_ibge(ibge_alvo))
         if not regiao_alvo: regiao_alvo = map_geo_regiao.get(chave_geo_alvo, "NÃO ENCONTRADA")
         
-        esp_alvo_series = pd.Series([row_alvo.get(col_esp_ind, '')]) if col_esp_ind else pd.Series()
+        esp_alvo_series = pd.Series([row_alvo.get(col_esp_ind, '')]) if col_esp_ind else pd.Series(dtype=str)
         esp_alvo_set = extrair_especialidades(esp_alvo_series)
         
         resultados = []; piscina_mun = set(); piscina_reg = set()
@@ -3016,7 +3034,8 @@ def pentefino_individual():
             cnpj_cand = str(row.get(col_cnpj_ind, '')).strip()
             if cnpj_cand == cnpj_alvo or cnpj_cand == 'NAN' or not cnpj_cand: continue
             
-            mun_cand = str(row.get(col_mun_ind, '')).strip().upper(); uf_cand = str(row.get(col_uf_ind, '')).strip().upper()
+            mun_cand = str(row.get(col_mun_ind, '')).strip().upper() if col_mun_ind else ""
+            uf_cand = str(row.get(col_uf_ind, '')).strip().upper() if col_uf_ind else ""
             chave_geo_cand = normalizar_texto(mun_cand) + "_" + normalizar_texto(uf_cand)
             
             ibge_cand = str(row.get(col_ibge_ind, '')) if col_ibge_ind else None
@@ -3036,7 +3055,7 @@ def pentefino_individual():
             if filtro_tipo == "MESMO TIPO DO ALVO" and tipo_cand != tipo_alvo: continue
             elif filtro_tipo and filtro_tipo != "MESMO TIPO DO ALVO" and tipo_cand != filtro_tipo: continue
                 
-            esp_cand_series = pd.Series([row.get(col_esp_ind, '')]) if col_esp_ind else pd.Series()
+            esp_cand_series = pd.Series([row.get(col_esp_ind, '')]) if col_esp_ind else pd.Series(dtype=str)
             esp_cand_set = extrair_especialidades(esp_cand_series)
             
             if ordem_prox == 0: 
@@ -3115,7 +3134,9 @@ def pentefino_individual():
                                       regiao_alvo=regiao_alvo, mun_alvo=mun_alvo, uf_alvo=uf_alvo,
                                       pool_mun_status=status_mun, pool_mun_faltantes=txt_faltante_mun,
                                       pool_reg_status=status_pool, pool_reg_faltantes=txt_faltante_pool)
-    except Exception as e: flash(f"Erro ao processar as planilhas: {e}", "danger"); return redirect(url_for('pentefino_individual'))
+    except Exception as e:
+        flash(f"Erro ao processar as planilhas: {type(e).__name__} - {e}", "danger")
+        return redirect(url_for('pentefino_individual'))
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
