@@ -27,13 +27,15 @@ def get_ph(conn):
 # ==========================================
 # INICIALIZAÇÃO E AUTO-REPARAÇÃO DO BANCO
 # ==========================================
-def inicializar_tabela_credenciamento():
+def inicializar_tabelas_extras():
     try:
         conn = conectar_db()
         if not conn: return
         c = conn.cursor()
         is_postgres = "psycopg2" in str(type(conn))
         id_col = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        
+        # Tabela do Módulo Credenciamento - Fases
         c.execute(f"""
             CREATE TABLE IF NOT EXISTS credenciamento_fases (
                 id {id_col},
@@ -68,10 +70,19 @@ def inicializar_tabela_credenciamento():
                 data_atualizacao TEXT
             )
         """)
+
+        # Tabela para guardar os arquivos PDF carregados na nuvem sem quebrar os índices da tabela demands
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS demands_pdfs (
+                demand_id INTEGER PRIMARY KEY,
+                filename TEXT,
+                pdf_b64 TEXT
+            )
+        """)
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"Aviso ao criar tabela credenciamento_fases: {e}")
+        print(f"Aviso ao inicializar tabelas extras: {e}")
 
 def sincronizar_sequencias():
     try:
@@ -88,7 +99,7 @@ def sincronizar_sequencias():
     except Exception as e:
         print(f"Aviso ao sincronizar sequências: {e}")
 
-inicializar_tabela_credenciamento()
+inicializar_tabelas_extras()
 sincronizar_sequencias()
 
 # ==========================================
@@ -334,7 +345,7 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
             <div class="card shadow-sm border-0 h-100 p-4">
                 <h1 class="mb-3">📄</h1>
                 <h5 class="fw-bold text-secondary">Rotinas (PDFs)</h5>
-                <p class="text-muted small mb-4">Importação automática de lotes PDF e controle de SLA duplo (COCAP/FOP).</p>
+                <p class="text-muted small mb-4">Importação e abertura de PDFs, impactos (+/-) e SLA duplo (COCAP/FOP).</p>
                 <a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold mt-auto">Acessar PDFs</a>
             </div>
         </div>
@@ -1105,12 +1116,12 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     
     <div class="card shadow-sm border-0"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small class="text-muted">(Duplo clique p/ Editar)</small></h5>
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small class="text-muted">(Duplo clique p/ Editar ou clique em 📄 PDF para abrir o arquivo)</small></h5>
             <span class="badge bg-primary fs-6">{{ rotinas|length }} Registro(s) Encontrado(s)</span>
         </div>
         <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em; cursor: pointer;">
-            <thead class="table-dark"><tr><th>ID</th><th>SLA (COCAP / FOP)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
+            <thead class="table-dark"><tr><th>ID</th><th>SLA (COCAP / FOP)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Impacto (% / R$)</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
             <tbody>{% for d in rotinas %}
             {% set sla_cocap = calc_sla(d[9], d[3]) %}
             {% set sla_geral = calc_sla(d[18], d[3]) %}
@@ -1138,10 +1149,28 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                         <span class="badge bg-light text-muted border">Geral: -</span>
                     {% endif %}
                 </td>
-                <td>{{ d[9] }}</td><td class="text-start fw-bold">{{ d[5] }}</td><td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
+                <td>{{ d[9] }}</td>
+                <td class="text-start fw-bold">
+                    {{ d[5] }}
+                    {% if d[1] %}<br><small class="text-muted fw-normal">{{ d[1] }}</small>{% endif %}
+                </td>
+                <td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
+                <td>
+                    {% if d[13] or d[14] %}
+                        {% if d[13] %}<span class="badge bg-{{ 'success' if '-' in (d[13]|string) else 'dark' }}">{{ d[13] }}</span><br>{% endif %}
+                        {% if d[14] %}<small class="fw-bold {{ 'text-success' if '-' in (d[14]|string) else 'text-dark' }}">R$ {{ d[14] }}</small>{% endif %}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
                 <td><span class="badge bg-{{ 'dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'warning text-dark' if d[3]=='Aguardando 90 dias' else 'danger' if d[3]=='Devolvido' else 'info' }}">{{ d[3] }}</span></td>
                 <td>{{ d[4] }}</td>
-                <td>
+                <td class="text-nowrap">
+                    {% if d[0] in pdfs_salvos %}
+                        <a href="/demandas/rotinas/pdf/{{ d[0] }}" target="_blank" class="btn btn-danger btn-sm fw-bold" title="Abrir PDF Original em nova guia">📄 PDF</a>
+                    {% else %}
+                        <button type="button" class="btn btn-outline-secondary btn-sm" title="PDF ainda não anexado na nuvem. Clique para abrir a edição e anexar o arquivo." onclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">📄</button>
+                    {% endif %}
                     <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] in ('Finalizada', 'Devolvido') %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] in ('Finalizada', 'Devolvido') %}disabled{% endif %} title="Finalizar">✔</button>
@@ -1151,7 +1180,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                         data-perc="{{ d[13] if d[13] else '' }}" data-rs="{{ d[14] if d[14] else '' }}" data-nup="{{ d[15] if d[15] else '' }}"
                         data-proc="{{ d[16] if d[16] else '' }}" data-fop="{{ d[17] if d[17] else '' }}" 
                         data-fop-date="{{ d[18] if d[18] else '' }}" data-obs="{{ d[22] if d[22] else '' }}"
-                        data-resp="{{ d[4] }}"
+                        data-resp="{{ d[4] }}" data-has-pdf="{{ '1' if d[0] in pdfs_salvos else '0' }}"
                         onclick="abrirModalRotina(this)">✏️</button>
                 </td>
             </tr>{% endfor %}</tbody>
@@ -1167,7 +1196,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
         <h5 class="modal-title fw-bold">✏️ Completar Informações da Demanda</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form method="POST" action="/demandas/rotinas/editar">
+      <form method="POST" action="/demandas/rotinas/editar" enctype="multipart/form-data">
       <div class="modal-body">
         <input type="hidden" name="id" id="edit_rot_id">
         <div class="row g-3">
@@ -1201,11 +1230,26 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             <div class="col-md-4"><label class="form-label fw-bold">FOP Autorização (Nº)</label>
                 <input type="text" name="fop_autorizacao" id="edit_rot_fop" class="form-control">
             </div>
-            <div class="col-md-2"><label class="form-label fw-bold">Impacto (%)</label>
-                <input type="text" name="impacto_perc" id="edit_rot_perc" class="form-control" placeholder="Ex: 5,4%">
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Impacto (%) <small class="text-muted">(+ / -)</small></label>
+                <div class="input-group input-group-sm">
+                    <button class="btn btn-outline-secondary fw-bold" type="button" onclick="alternarSinal('edit_rot_perc')" title="Alternar Positivo / Negativo">±</button>
+                    <input type="text" name="impacto_perc" id="edit_rot_perc" class="form-control" placeholder="Ex: -5,4% ou 5,4%">
+                </div>
             </div>
-            <div class="col-md-2"><label class="form-label fw-bold">Impacto (R$)</label>
-                <input type="text" name="impacto_rs" id="edit_rot_rs" class="form-control" placeholder="Ex: 15000,00">
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Impacto (R$) <small class="text-muted">(+ / -)</small></label>
+                <div class="input-group input-group-sm">
+                    <button class="btn btn-outline-secondary fw-bold" type="button" onclick="alternarSinal('edit_rot_rs')" title="Alternar Positivo / Negativo">±</button>
+                    <input type="text" name="impacto_rs" id="edit_rot_rs" class="form-control" placeholder="Ex: -1500,00">
+                </div>
+            </div>
+            <div class="col-md-12">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label fw-bold mb-0">📄 Arquivo PDF da Demanda (Opcional: Anexar ou Substituir PDF)</label>
+                    <a id="link_abrir_pdf_modal" href="#" target="_blank" class="btn btn-danger btn-sm fw-bold" style="display:none;">📄 Abrir PDF Atual</a>
+                </div>
+                <input type="file" name="arquivo_pdf_edit" class="form-control form-control-sm" accept=".pdf">
             </div>
             <div class="col-md-12"><label class="form-label fw-bold">Observações</label>
                 <textarea name="observacao" id="edit_rot_obs" class="form-control" rows="3"></textarea>
@@ -1222,8 +1266,24 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+function alternarSinal(inputId) {
+    let el = document.getElementById(inputId);
+    let v = (el.value || '').trim();
+    if (!v) {
+        el.value = '-';
+    } else if (v.startsWith('-')) {
+        el.value = v.substring(1).trim();
+    } else if (v.startsWith('+')) {
+        el.value = '-' + v.substring(1).trim();
+    } else {
+        el.value = '-' + v;
+    }
+    el.focus();
+}
+
 function abrirModalRotina(btn) {
-    document.getElementById('edit_rot_id').value = btn.getAttribute('data-id');
+    let idDem = btn.getAttribute('data-id');
+    document.getElementById('edit_rot_id').value = idDem;
     document.getElementById('edit_rot_status').value = btn.getAttribute('data-status') || 'Pendente';
     document.getElementById('edit_rot_tipo').value = btn.getAttribute('data-tipo');
     document.getElementById('edit_rot_alcada').value = btn.getAttribute('data-alcada');
@@ -1241,6 +1301,15 @@ function abrirModalRotina(btn) {
     document.getElementById('edit_rot_data_fop').value = dStr;
     document.getElementById('edit_rot_obs').value = btn.getAttribute('data-obs');
     document.getElementById('edit_rot_resp').value = btn.getAttribute('data-resp');
+
+    let linkPdf = document.getElementById('link_abrir_pdf_modal');
+    if (btn.getAttribute('data-has-pdf') === '1') {
+        linkPdf.href = '/demandas/rotinas/pdf/' + idDem;
+        linkPdf.style.display = 'inline-block';
+    } else {
+        linkPdf.style.display = 'none';
+    }
+
     new bootstrap.Modal(document.getElementById('modalEditRotina')).show();
 }
 </script>
@@ -1694,13 +1763,11 @@ def normalizar_texto(texto):
     return ''.join(c for c in unicodedata.normalize('NFD', t_limpo) if unicodedata.category(c) != 'Mn').upper().strip()
 
 def cacador_de_colunas(df, palavras_chave):
-    # 1ª Passada: Busca exata ignorando acentos e codificação
     for k in palavras_chave:
         k_norm = normalizar_texto(k)
         for col in df.columns:
             if k_norm == normalizar_texto(col):
                 return col
-    # 2ª Passada: Busca por contenção ignorando acentos e codificação
     for k in palavras_chave:
         k_norm = normalizar_texto(k)
         for col in df.columns:
@@ -1729,8 +1796,6 @@ def ler_arquivo(file_obj, nrows=None):
         raw_bytes = file_obj.read()
         file_obj.seek(0)
         
-        # Para arquivos .csv (como pop_ibge.csv), prioriza utf-8 e latin1/cp1252
-        # Para arquivos .txt (como POSTAL191.txt), prioriza utf-8 e cp1250
         if filename.endswith('.csv'):
             ordem_enc = ['utf-8-sig', 'utf-8', 'latin1', 'cp1252', 'cp1250']
         else:
@@ -1753,7 +1818,6 @@ def ler_arquivo(file_obj, nrows=None):
         primeira_linha = linhas[0]
         m_sep = re.search(r'FILIALPADRAO(.+?)CNPJCPF', primeira_linha, re.IGNORECASE)
 
-        # Se for relatório POSTAL191 ou TXT com delimitador especial, usa o parser linha a linha imune a ';'
         if m_sep or 'Ź' in primeira_linha or '\x8f' in primeira_linha or filename.endswith('.txt'):
             if m_sep: sep = m_sep.group(1)
             elif 'Ź' in primeira_linha: sep = 'Ź'
@@ -1778,7 +1842,6 @@ def ler_arquivo(file_obj, nrows=None):
                 dados.append(partes)
             return pd.DataFrame(dados, columns=cabecalhos, dtype=str)
 
-        # Leitura padrão para CSV (pop_ibge.csv, etc.)
         sep = ';' if ';' in primeira_linha else (',' if ',' in primeira_linha else '\t')
         from io import StringIO
         df_csv = pd.read_csv(StringIO(texto_decodificado), sep=sep, dtype=str, nrows=nrows, on_bad_lines='skip')
@@ -1788,6 +1851,15 @@ def ler_arquivo(file_obj, nrows=None):
         df_xl = pd.read_excel(file_obj, dtype=str, nrows=nrows)
         df_xl.columns = [corrigir_encoding_postal(c).strip() for c in df_xl.columns]
         return df_xl
+
+def salvar_pdf_no_banco(conn, demand_id, filename, raw_pdf_bytes):
+    if not raw_pdf_bytes or not demand_id:
+        return
+    ph = get_ph(conn)
+    c = conn.cursor()
+    b64_str = base64.b64encode(raw_pdf_bytes).decode('utf-8')
+    c.execute(f"DELETE FROM demands_pdfs WHERE demand_id={ph}", (demand_id,))
+    c.execute(f"INSERT INTO demands_pdfs (demand_id, filename, pdf_b64) VALUES ({ph}, {ph}, {ph})", (demand_id, filename, b64_str))
 
 
 # ==========================================
@@ -1864,7 +1936,7 @@ def dashboard():
 @app.route('/credenciamento')
 def credenciamento_fases():
     if 'user' not in session: return redirect(url_for('login'))
-    inicializar_tabela_credenciamento()
+    inicializar_tabelas_extras()
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
 
     f_ultima = request.args.get('ultima_fase', 'SIM')
@@ -2067,7 +2139,7 @@ def upload_credenciamento():
         return redirect(url_for('credenciamento_fases'))
 
     try:
-        inicializar_tabela_credenciamento()
+        inicializar_tabelas_extras()
         df = ler_arquivo(file)
         df.columns = [corrigir_encoding_postal(c).strip().upper() for c in df.columns]
         df = df.loc[:, ~df.columns.str.contains('^UNNAMED')]
@@ -2370,6 +2442,7 @@ def editar_avulsa():
 @app.route('/demandas/rotinas')
 def demandas_rotinas():
     if 'user' not in session: return redirect(url_for('login'))
+    inicializar_tabelas_extras()
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
     s_filtro = request.args.get('status', 'Todos'); t_filtro = request.args.get('tipo', 'Todos'); r_filtro = request.args.get('resp', 'Todos')
     q = "SELECT * FROM demands WHERE 1=1"; p = []
@@ -2377,8 +2450,29 @@ def demandas_rotinas():
     if t_filtro != 'Todos': q += f" AND type={ph}"; p.append(t_filtro)
     if r_filtro != 'Todos': q += f" AND assigned_to={ph}"; p.append(r_filtro)
     c.execute(q + " ORDER BY id DESC", tuple(p)); rotinas = c.fetchall()
-    c.execute("SELECT username FROM users ORDER BY id ASC"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]; conn.close()
-    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, status_list=STATUS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla, calc_fechados=calcular_dias_fechados)
+    c.execute("SELECT username FROM users ORDER BY id ASC"); usuarios = ['Todos', 'Nenhum'] + [r[0] for r in c.fetchall()]
+    try:
+        c.execute("SELECT demand_id FROM demands_pdfs")
+        pdfs_salvos = {r[0] for r in c.fetchall()}
+    except Exception:
+        pdfs_salvos = set()
+    conn.close()
+    return render_template_string(TELA_ROTINAS, rotinas=rotinas, tipos=TIPOS_ROTINA, status_list=STATUS_ROTINA, usuarios=usuarios, atual_status=s_filtro, atual_tipo=t_filtro, atual_resp=r_filtro, calc_sla=calcular_sla, calc_fechados=calcular_dias_fechados, pdfs_salvos=pdfs_salvos)
+
+@app.route('/demandas/rotinas/pdf/<int:demand_id>')
+def abrir_pdf_rotina(demand_id):
+    if 'user' not in session: return redirect(url_for('login'))
+    inicializar_tabelas_extras()
+    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
+    c.execute(f"SELECT filename, pdf_b64 FROM demands_pdfs WHERE demand_id={ph}", (demand_id,))
+    row = c.fetchone()
+    conn.close()
+    if not row or not row[1]:
+        flash("Este registro foi migrado sem o arquivo físico. Dê duplo clique na linha para anexar o PDF ou reenvie pelo botão Importar PDFs.", "warning")
+        return redirect(url_for('demandas_rotinas'))
+    pdf_bytes = base64.b64decode(row[1])
+    nome_arq = row[0] if row[0] else f"Demanda_{demand_id}.pdf"
+    return send_file(BytesIO(pdf_bytes), mimetype='application/pdf', as_attachment=False, download_name=nome_arq)
 
 @app.route('/demandas/rotinas/upload', methods=['POST'])
 def upload_rotinas():
@@ -2388,18 +2482,29 @@ def upload_rotinas():
         flash("Nenhum arquivo selecionado.", "warning")
         return redirect(url_for('demandas_rotinas'))
         
+    inicializar_tabelas_extras()
     sincronizar_sequencias()
     kw = {"REAJUSTE": "Reajuste", "NOVO CONTRATO": "Novo Contrato", "INCLUSÃO": "Inclusão", "INCLUSAO": "Inclusão", "EXCLUSÃO": "Exclusão", "EXCLUSAO": "Exclusão", "AJUSTE": "Ajuste", "EXTENSÃO": "Extensão", "EXTENSAO": "Extensão", "DESCREDENCIAMENTO": "Descredenciamento"}
     valid_ufs = {'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'}
     conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    count = 0; ignorados = 0
+    count = 0; vinculados = 0; ignorados = 0
     
     for file in arquivos:
         try:
             f_name = file.filename
+            raw_pdf = file.read()
             c.execute(f"SELECT id FROM demands WHERE filename={ph}", (f_name,))
-            if c.fetchone():
-                ignorados += 1
+            row_existente = c.fetchone()
+            if row_existente:
+                # Se a demanda já existe mas ainda não tinha o PDF gravado na nuvem, vincula o PDF agora!
+                id_exist = row_existente[0]
+                c.execute(f"SELECT demand_id FROM demands_pdfs WHERE demand_id={ph}", (id_exist,))
+                if not c.fetchone() and raw_pdf:
+                    salvar_pdf_no_banco(conn, id_exist, f_name, raw_pdf)
+                    conn.commit()
+                    vinculados += 1
+                else:
+                    ignorados += 1
                 continue
             
             fu = f_name.upper(); dem = "Não Identificada"
@@ -2432,8 +2537,7 @@ def upload_rotinas():
             
             if prest == "Não encontrado" or uf == "-" or cnpj_p == "Não encontrado":
                 try:
-                    pdf_bytes = BytesIO(file.read())
-                    reader = PyPDF2.PdfReader(pdf_bytes); full_txt = ""
+                    reader = PyPDF2.PdfReader(BytesIO(raw_pdf)); full_txt = ""
                     for page in reader.pages: full_txt += (page.extract_text() or "") + " "
                     if cnpj_p == "Não encontrado":
                         docs_text = re.findall(r'\d{2}[.\s]*\d{3}[.\s]*\d{3}[/\s]*\d{4}[-\s]*\d{2}|\b\d{14}\b', full_txt)
@@ -2446,15 +2550,22 @@ def upload_rotinas():
             c.execute(f"INSERT INTO demands (filename, filepath, type, status, assigned_to, prestador, cnpj, municipio, uf, data_entrada) VALUES ({ph}, 'WEB_UPLOAD', {ph}, 'Pendente', 'Nenhum', {ph}, {ph}, {ph}, {ph}, {ph})", 
                          (f_name, dem, prest, cnpj_p, mun, uf, datetime.now().strftime("%d/%m/%Y %H:%M")))
             conn.commit()
+
+            c.execute(f"SELECT id FROM demands WHERE filename={ph} ORDER BY id DESC LIMIT 1", (f_name,))
+            novo_id_row = c.fetchone()
+            if novo_id_row and raw_pdf:
+                salvar_pdf_no_banco(conn, novo_id_row[0], f_name, raw_pdf)
+                conn.commit()
             count += 1
         except Exception as e:
             conn.rollback()
             flash(f"Erro ao importar '{file.filename}': {e}", "danger")
             
     conn.close()
-    msg = f"{count} PDF(s) processado(s) com sucesso!"
-    if ignorados > 0: msg += f" ({ignorados} já existiam na base e foram ignorados)."
-    flash(msg, "success" if count > 0 else "warning")
+    msg = f"{count} novo(s) PDF(s) processado(s) com sucesso!"
+    if vinculados > 0: msg += f" ({vinculados} PDF(s) vinculado(s) a demandas existentes)."
+    if ignorados > 0: msg += f" ({ignorados} já existiam na base)."
+    flash(msg, "success" if (count > 0 or vinculados > 0) else "warning")
     return redirect(url_for('demandas_rotinas'))
 
 @app.route('/demandas/rotinas/acao', methods=['POST'])
@@ -2475,11 +2586,15 @@ def acao_rotinas():
 @app.route('/demandas/rotinas/editar', methods=['POST'])
 def editar_rotina():
     if 'user' not in session: return redirect(url_for('login'))
+    inicializar_tabelas_extras()
     d_id = request.form.get('id'); status = request.form.get('status')
     tipo_neg = request.form.get('tipo_negociacao'); alcada = request.form.get('alcada')
-    perc = request.form.get('impacto_perc'); rs = request.form.get('impacto_rs'); nup = request.form.get('nup_edoc')
-    proc = request.form.get('tipo_processo'); fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
+    perc = request.form.get('impacto_perc', '').strip()
+    rs = request.form.get('impacto_rs', '').strip()
+    nup = request.form.get('nup_edoc'); proc = request.form.get('tipo_processo')
+    fop = request.form.get('fop_autorizacao'); obs = request.form.get('observacao')
     resp = request.form.get('responsavel'); data_fop = request.form.get('data_aprovacao')
+    arq_pdf_edit = request.files.get('arquivo_pdf_edit')
 
     if str(proc or '').strip().upper() == 'DEVOLVIDO' and status not in ['Finalizada', 'Cancelada']:
         status = 'Devolvido'
@@ -2493,6 +2608,12 @@ def editar_rotina():
         else:
             c.execute(f"UPDATE demands SET status={ph}, assigned_to={ph}, tipo_negociacao={ph}, alcada={ph}, impacto_perc={ph}, impacto_rs={ph}, nup_edoc={ph}, tipo_processo={ph}, fop_autorizacao={ph}, data_aprovacao={ph}, observacao={ph} WHERE id={ph}",
                       (status, resp, tipo_neg, alcada, perc, rs, nup, proc, fop, data_fop, obs, d_id))
+
+        if arq_pdf_edit and arq_pdf_edit.filename != '':
+            raw_bytes = arq_pdf_edit.read()
+            if raw_bytes:
+                salvar_pdf_no_banco(conn, int(d_id), arq_pdf_edit.filename, raw_bytes)
+
         conn.commit()
         flash("Informações do processo atualizadas com sucesso!", "success")
     except Exception as e:
@@ -2505,7 +2626,7 @@ def editar_rotina():
 @app.route('/demandas/dashboard_graficos')
 def dashboard_graficos():
     if 'user' not in session: return redirect(url_for('login'))
-    inicializar_tabela_credenciamento()
+    inicializar_tabelas_extras()
     conn = conectar_db(); c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
@@ -2619,7 +2740,7 @@ def dashboard_graficos():
 @app.route('/demandas/relatorio_pdf')
 def exportar_relatorio_pdf():
     if 'user' not in session: return redirect(url_for('login'))
-    inicializar_tabela_credenciamento()
+    inicializar_tabelas_extras()
     conn = conectar_db(); c = conn.cursor()
 
     c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
@@ -2964,7 +3085,6 @@ def pentefino_individual():
             
         df_ind[col_cnpj_ind] = df_ind[col_cnpj_ind].astype(str).str.replace(r'\D', '', regex=True)
         
-        # Se o usuário selecionou da lista no formato "CNPJ - NOME", separa os termos para busca exata
         if ' - ' in alvo_bruto:
             partes_alvo = alvo_bruto.split(' - ', 1)
             cnpj_busca = re.sub(r'\D', '', partes_alvo[0])
