@@ -35,7 +35,6 @@ def inicializar_tabelas_extras():
         is_postgres = "psycopg2" in str(type(conn))
         id_col = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
         
-        # Tabela do Módulo Credenciamento - Fases
         c.execute(f"""
             CREATE TABLE IF NOT EXISTS credenciamento_fases (
                 id {id_col},
@@ -71,7 +70,6 @@ def inicializar_tabelas_extras():
             )
         """)
 
-        # Tabela para guardar os arquivos PDF carregados na nuvem sem quebrar os índices da tabela demands
         c.execute("""
             CREATE TABLE IF NOT EXISTS demands_pdfs (
                 demand_id INTEGER PRIMARY KEY,
@@ -103,13 +101,20 @@ inicializar_tabelas_extras()
 sincronizar_sequencias()
 
 # ==========================================
-# MOTORES DE CÁLCULO DE SLA (COM TRAVA DE PARADA)
+# MOTORES DE CÁLCULO DE SLA E FILTRO DE DATA
 # ==========================================
 STATUS_ENCERRADOS_DEMANDAS = {
     'CONCLUÍDO', 'CONCLUIDO', 'FINALIZADA', 'FINALIZADO',
     'DEVOLVIDO', 'DEVOLVIDA', 'CANCELADA', 'CANCELADO',
     'DEFERIDO', 'INDEFERIDO'
 }
+
+MESES_NOMES = [
+    ("01", "01 - Janeiro"), ("02", "02 - Fevereiro"), ("03", "03 - Março"),
+    ("04", "04 - Abril"), ("05", "05 - Maio"), ("06", "06 - Junho"),
+    ("07", "07 - Julho"), ("08", "08 - Agosto"), ("09", "09 - Setembro"),
+    ("10", "10 - Outubro"), ("11", "11 - Novembro"), ("12", "12 - Dezembro")
+]
 
 def parse_data_br(data_str):
     if not data_str: return None
@@ -122,6 +127,18 @@ def parse_data_br(data_str):
         return datetime.strptime(part, "%d/%m/%Y")
     except Exception:
         return None
+
+def bate_mes_ano(data_str, f_mes, f_ano):
+    if f_mes == 'Todos' and f_ano == 'Todos':
+        return True
+    dt = parse_data_br(data_str)
+    if not dt:
+        return False
+    if f_mes != 'Todos' and f"{dt.month:02d}" != str(f_mes).zfill(2):
+        return False
+    if f_ano != 'Todos' and str(dt.year) != str(f_ano):
+        return False
+    return True
 
 def calcular_sla(data_str, status, data_fim=None):
     st_upper = str(status or '').strip().upper()
@@ -313,7 +330,7 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
             <div class="card shadow-sm h-100 p-4 border-0">
                 <h1 class="text-info mb-3" style="font-size: 3rem;">📊</h1>
                 <h4 class="fw-bold">Dashboard Gerencial</h4>
-                <p class="text-muted mb-4">Painel executivo consolidado de Status, SLAs, Credenciamento e Relatório PDF.</p>
+                <p class="text-muted mb-4">Painel executivo com filtro de Mês/Ano, Status, SLAs e Relatório PDF.</p>
                 <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 fw-bold py-2 mt-auto">Acessar Dashboard</a>
             </div>
         </div>
@@ -345,7 +362,7 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
             <div class="card shadow-sm border-0 h-100 p-4">
                 <h1 class="mb-3">📄</h1>
                 <h5 class="fw-bold text-secondary">Rotinas (PDFs)</h5>
-                <p class="text-muted small mb-4">Importação e abertura de PDFs, impactos (+/-) e SLA duplo (COCAP/FOP).</p>
+                <p class="text-muted small mb-4">Importação e abertura direta de PDFs, impactos (+/-) e SLA duplo (COCAP/FOP).</p>
                 <a href="/demandas/rotinas" class="btn btn-primary w-100 py-3 fw-bold mt-auto">Acessar PDFs</a>
             </div>
         </div>
@@ -369,7 +386,7 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
             <div class="card shadow-sm border-0 h-100 p-4">
                 <h1 class="mb-3">📊</h1>
                 <h5 class="fw-bold text-secondary">Dashboard Gerencial</h5>
-                <p class="text-muted small mb-4">Visão consolidada das 3 frentes, indicadores de SLA, gráficos e PDF.</p>
+                <p class="text-muted small mb-4">Visão consolidada das 3 frentes com filtro por Mês/Ano, SLA e PDF.</p>
                 <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold mt-auto">Ver Dashboard</a>
             </div>
         </div>
@@ -405,7 +422,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
 <div class="container-fluid mt-3">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
 
-    <!-- Upload Diário do Relatório POSTAL191 -->
     <div class="card shadow-sm mb-3 border-0">
         <div class="card-body py-2 bg-white rounded">
             <form method="POST" action="/credenciamento/upload" enctype="multipart/form-data" class="row g-2 align-items-center">
@@ -422,7 +438,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Monitoramento de SLA do Credenciamento -->
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="mb-0 text-secondary fw-bold">⏱️ Monitoramento de SLA por Fase (Ativos na Visão: {{ sla_resumo.ativos }} | Parados/Concluídos/Devolvidos: {{ registros|length - sla_resumo.ativos }})</h6>
         <small class="text-muted">Nota: Status Finalizada, Devolvido, Deferido ou Indeferido param a contagem do SLA automaticamente.</small>
@@ -466,7 +481,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Cards Resumo por Status / Parecer -->
     <div class="row text-center g-2 mb-3">
         <div class="col-md-2 col-6">
             <div class="card shadow-sm border-0 bg-primary text-white p-2 h-100">
@@ -500,7 +514,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Gráficos Gerenciais (Colapsável) -->
     <div class="collapse mb-3" id="painelGraficosCred">
         <div class="row g-3">
             <div class="col-md-6">
@@ -522,7 +535,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Contagem Rápida por Fase -->
     {% if kpi_fases %}
     <div class="row g-2 mb-3">
         {% for f_nome, f_qtd in kpi_fases %}
@@ -538,7 +550,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
     </div>
     {% endif %}
 
-    <!-- Barra de Filtros -->
     <div class="card shadow-sm mb-3 border-0 bg-light">
         <div class="card-body py-2">
             <form method="GET" action="/credenciamento" class="row g-2 align-items-end">
@@ -602,7 +613,6 @@ TELA_CREDENCIAMENTO_FASES = """<!DOCTYPE html><html lang="pt-BR"><head><meta cha
         </div>
     </div>
 
-    <!-- Tabela de Processos de Credenciamento -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1116,12 +1126,27 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
     
     <div class="card shadow-sm border-0"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small class="text-muted">(Duplo clique p/ Editar ou clique em 📄 PDF para abrir o arquivo)</small></h5>
+            <h5 class="mb-0 text-secondary fw-bold">Lista de Processamentos <small class="text-muted">(Duplo clique p/ Editar ou clique em 📄 Abrir PDF)</small></h5>
             <span class="badge bg-primary fs-6">{{ rotinas|length }} Registro(s) Encontrado(s)</span>
         </div>
         <div class="table-responsive">
         <table class="table table-hover table-bordered align-middle text-center" style="font-size: 0.85em; cursor: pointer;">
-            <thead class="table-dark"><tr><th>ID</th><th>SLA (COCAP / FOP)</th><th>Data Entrada</th><th>Prestador</th><th>CNPJ</th><th>Mun/UF</th><th>Demanda</th><th>Impacto (% / R$)</th><th>Status</th><th>Resp.</th><th>Ações</th></tr></thead>
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>SLA (COCAP / FOP)</th>
+                    <th>Data Entrada</th>
+                    <th>Prestador</th>
+                    <th>Arquivo PDF</th>
+                    <th>CNPJ</th>
+                    <th>Mun/UF</th>
+                    <th>Demanda</th>
+                    <th>Impacto (% / R$)</th>
+                    <th>Status</th>
+                    <th>Resp.</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
             <tbody>{% for d in rotinas %}
             {% set sla_cocap = calc_sla(d[9], d[3]) %}
             {% set sla_geral = calc_sla(d[18], d[3]) %}
@@ -1154,6 +1179,13 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                     {{ d[5] }}
                     {% if d[1] %}<br><small class="text-muted fw-normal">{{ d[1] }}</small>{% endif %}
                 </td>
+                <td class="text-nowrap">
+                    {% if d[0] in pdfs_salvos %}
+                        <a href="/demandas/rotinas/pdf/{{ d[0] }}" target="_blank" onclick="event.stopPropagation();" class="btn btn-danger btn-sm fw-bold shadow-sm" title="Abrir arquivo PDF em nova aba">📄 Abrir PDF</a>
+                    {% else %}
+                        <button type="button" class="btn btn-outline-secondary btn-sm fw-bold" onclick="event.stopPropagation(); document.getElementById('btn-edit-rot-{{d[0]}}').click();" title="Anexar PDF a esta demanda">📎 Anexar PDF</button>
+                    {% endif %}
+                </td>
                 <td>{{ d[6] }}</td><td>{{ d[7] }}/{{ d[8] }}</td><td>{{ d[2] }}</td>
                 <td>
                     {% if d[13] or d[14] %}
@@ -1166,12 +1198,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                 <td><span class="badge bg-{{ 'dark' if d[3]=='Pendente' else 'success' if d[3]=='Finalizada' else 'warning text-dark' if d[3]=='Aguardando 90 dias' else 'danger' if d[3]=='Devolvido' else 'info' }}">{{ d[3] }}</span></td>
                 <td>{{ d[4] }}</td>
                 <td class="text-nowrap">
-                    {% if d[0] in pdfs_salvos %}
-                        <a href="/demandas/rotinas/pdf/{{ d[0] }}" target="_blank" class="btn btn-danger btn-sm fw-bold" title="Abrir PDF Original em nova guia">📄 PDF</a>
-                    {% else %}
-                        <button type="button" class="btn btn-outline-secondary btn-sm" title="PDF ainda não anexado na nuvem. Clique para abrir a edição e anexar o arquivo." onclick="document.getElementById('btn-edit-rot-{{d[0]}}').click();">📄</button>
-                    {% endif %}
-                    <form method="POST" action="/demandas/rotinas/acao" style="display:inline;"><input type="hidden" name="id" value="{{ d[0] }}">
+                    <form method="POST" action="/demandas/rotinas/acao" style="display:inline;" onclick="event.stopPropagation();"><input type="hidden" name="id" value="{{ d[0] }}">
                         <button type="submit" name="acao" value="assumir" class="btn btn-warning btn-sm fw-bold" {% if d[3] in ('Finalizada', 'Devolvido') %}disabled{% endif %} title="Assumir">✋</button>
                         <button type="submit" name="acao" value="finalizar" class="btn btn-success btn-sm fw-bold" {% if d[3] in ('Finalizada', 'Devolvido') %}disabled{% endif %} title="Finalizar">✔</button>
                     </form>
@@ -1181,7 +1208,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
                         data-proc="{{ d[16] if d[16] else '' }}" data-fop="{{ d[17] if d[17] else '' }}" 
                         data-fop-date="{{ d[18] if d[18] else '' }}" data-obs="{{ d[22] if d[22] else '' }}"
                         data-resp="{{ d[4] }}" data-has-pdf="{{ '1' if d[0] in pdfs_salvos else '0' }}"
-                        onclick="abrirModalRotina(this)">✏️</button>
+                        onclick="event.stopPropagation(); abrirModalRotina(this);">✏️</button>
                 </td>
             </tr>{% endfor %}</tbody>
         </table>
@@ -1246,7 +1273,7 @@ TELA_ROTINAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Rotinas (PDFs)<
             </div>
             <div class="col-md-12">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <label class="form-label fw-bold mb-0">📄 Arquivo PDF da Demanda (Opcional: Anexar ou Substituir PDF)</label>
+                    <label class="form-label fw-bold mb-0">📄 Arquivo PDF da Demanda (Anexar ou Substituir PDF)</label>
                     <a id="link_abrir_pdf_modal" href="#" target="_blank" class="btn btn-danger btn-sm fw-bold" style="display:none;">📄 Abrir PDF Atual</a>
                 </div>
                 <input type="file" name="arquivo_pdf_edit" class="form-control form-control-sm" accept=".pdf">
@@ -1325,19 +1352,53 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
     </div>
     <span class="text-white fw-bold">📊 Dashboard Gerencial Unificado (PDFs + Avulsas + Credenciamento)</span>
     <div class="d-flex gap-2">
-        <a href="/demandas/relatorio_pdf" class="btn btn-danger btn-sm fw-bold">📄 Baixar Relatório Geral do Cenário (PDF)</a>
+        <a href="/demandas/relatorio_pdf?mes={{ f_mes }}&ano={{ f_ano }}" class="btn btn-danger btn-sm fw-bold">📄 Baixar Relatório Geral do Cenário (PDF)</a>
         <a href="/credenciamento" class="btn btn-success btn-sm fw-bold">📋 Ir para Credenciamento - Fases</a>
     </div>
   </div>
 </nav>
-<div class="container mt-4">
+<div class="container mt-3">
+    <!-- Barra de Filtro por Mês e Ano -->
+    <div class="card shadow-sm border-0 mb-3 bg-white">
+        <div class="card-body py-2">
+            <form method="GET" action="/demandas/dashboard_graficos" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <span class="fw-bold text-primary">📅 Filtrar Cenário por Período:</span>
+                    <div class="small text-muted">Exibindo: <strong>{{ label_periodo }}</strong></div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold mb-1">Mês de Entrada / Abertura</label>
+                    <select name="mes" class="form-select form-select-sm border-primary">
+                        <option value="Todos" {% if f_mes == 'Todos' %}selected{% endif %}>Todos os Meses</option>
+                        {% for cod_m, nome_m in meses_opcoes %}
+                        <option value="{{ cod_m }}" {% if f_mes == cod_m %}selected{% endif %}>{{ nome_m }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold mb-1">Ano</label>
+                    <select name="ano" class="form-select form-select-sm border-primary">
+                        <option value="Todos" {% if f_ano == 'Todos' %}selected{% endif %}>Todos os Anos</option>
+                        {% for a_op in anos_opcoes %}
+                        <option value="{{ a_op }}" {% if f_ano == a_op %}selected{% endif %}>{{ a_op }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">🔍 Filtrar Período</button>
+                    <a href="/demandas/dashboard_graficos" class="btn btn-outline-secondary btn-sm fw-bold" title="Limpar Filtro">✖</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Resumo Geral Unificado (As 3 Frentes) -->
     <div class="row text-center mb-4 g-3">
         <div class="col-md-3">
             <div class="card shadow-sm border-0 bg-primary text-white p-3 h-100">
                 <h6 class="mb-1 fw-bold">Total Geral Consolidado</h6>
                 <h1 class="fw-bold mb-0">{{ d_total_geral }}</h1>
-                <small class="text-light opacity-75">Soma das 3 Frentes Operacionais</small>
+                <small class="text-light opacity-75">Soma das 3 Frentes ({{ label_periodo }})</small>
             </div>
         </div>
         <div class="col-md-3">
@@ -1358,7 +1419,7 @@ TELA_DASHBOARD_GRAFICOS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Dash
             <div class="card shadow-sm border-0 bg-success text-white p-3 h-100">
                 <h6 class="mb-1 fw-bold">3. Credenciamento (Fase Atual)</h6>
                 <h1 class="fw-bold mb-0">{{ t_cred_atual }}</h1>
-                <small class="text-light opacity-75">Total Histórico: {{ t_cred_total }} linhas</small>
+                <small class="text-light opacity-75">Total Histórico no Período: {{ t_cred_total }}</small>
             </div>
         </div>
     </div>
@@ -1638,7 +1699,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_b64 }}" download="Relatorio_Substituicao_{{ alvo_cnpj }}.xlsx" class="btn btn-success btn-lg fw-bold shadow-sm">⬇ Baixar Planilha Completa (Excel)</a>
     </div>
     
-    <!-- Linha POOL DO MUNICÍPIO -->
     <div class="alert alert-info shadow-sm border-info mt-3">
         <h5 class="fw-bold text-dark mb-1">📍 Avaliação do Pool do Município ({{ mun_alvo }}/{{ uf_alvo }})</h5>
         <p class="mb-0 text-dark"><strong>Status:</strong> {{ pool_mun_status }}</p>
@@ -1647,7 +1707,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         {% endif %}
     </div>
 
-    <!-- Linha POOL DA REGIÃO -->
     <div class="alert alert-warning shadow-sm border-warning mt-3">
         <h5 class="fw-bold text-dark mb-1">⭐ Avaliação do Pool da Região de Saúde ({{ regiao_alvo }})</h5>
         <p class="mb-0 text-dark"><strong>Status:</strong> {{ pool_reg_status }}</p>
@@ -1658,7 +1717,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
 
     <h4 class="fw-bold text-secondary mt-5 mb-3 border-bottom pb-2">1. Análise Municipal (1ª Etapa)</h4>
     
-    <!-- Tabela 1: 100% Município -->
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-header bg-primary text-white fw-bold fs-5">🏆 100% de Cobertura no MUNICÍPIO</div>
         <div class="card-body p-0">
@@ -1680,7 +1738,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         </div>
     </div>
     
-    <!-- Tabela 2: Vulneráveis Município -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header bg-danger text-white fw-bold fs-5">⚠️ Cobertura Parcial no MUNICÍPIO (Vulneráveis)</div>
         <div class="card-body p-0">
@@ -1705,7 +1762,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
 
     <h4 class="fw-bold text-secondary mt-5 mb-3 border-bottom pb-2">2. Análise Regional (2ª Etapa - Demais Municípios da Região)</h4>
 
-    <!-- Tabela 3: 100% Região -->
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-header text-white fw-bold fs-5" style="background-color: #0dcaf0;">🌟 100% de Cobertura na REGIÃO DE SAÚDE</div>
         <div class="card-body p-0">
@@ -1727,7 +1783,6 @@ TELA_PENTEFINO_INDIVIDUAL_RESULTADO = """<!DOCTYPE html><html lang="pt-BR"><head
         </div>
     </div>
     
-    <!-- Tabela 4: Vulneráveis Região -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header text-white fw-bold fs-5" style="background-color: #fd7e14;">⚡ Cobertura Parcial na REGIÃO DE SAÚDE (Vulneráveis)</div>
         <div class="card-body p-0">
@@ -2496,7 +2551,6 @@ def upload_rotinas():
             c.execute(f"SELECT id FROM demands WHERE filename={ph}", (f_name,))
             row_existente = c.fetchone()
             if row_existente:
-                # Se a demanda já existe mas ainda não tinha o PDF gravado na nuvem, vincula o PDF agora!
                 id_exist = row_existente[0]
                 c.execute(f"SELECT demand_id FROM demands_pdfs WHERE demand_id={ph}", (id_exist,))
                 if not c.fetchone() and raw_pdf:
@@ -2623,43 +2677,97 @@ def editar_rotina():
         conn.close()
     return redirect(url_for('demandas_rotinas'))
 
-@app.route('/demandas/dashboard_graficos')
-def dashboard_graficos():
-    if 'user' not in session: return redirect(url_for('login'))
+def coletar_dados_dashboard(f_mes='Todos', f_ano='Todos'):
     inicializar_tabelas_extras()
     conn = conectar_db(); c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM credenciamento_fases"); t_cred_total = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM credenciamento_fases WHERE ultima_fase='SIM'"); t_cred_atual = c.fetchone()[0]
-    
+
+    c.execute("SELECT status, type, assigned_to, data_entrada FROM demands")
+    all_demands = c.fetchall()
+
+    c.execute("SELECT status, tipo_demanda, responsavel, data_entrada FROM demandas_avulsas")
+    all_avulsas = c.fetchall()
+
+    c.execute("SELECT * FROM credenciamento_fases")
+    all_cred = c.fetchall()
+    conn.close()
+
+    # Coleta dinâmica dos anos existentes na base
+    anos_set = {"2025", "2026"}
+    for r in all_demands:
+        dt = parse_data_br(r[3])
+        if dt: anos_set.add(str(dt.year))
+    for r in all_avulsas:
+        dt = parse_data_br(r[3])
+        if dt: anos_set.add(str(dt.year))
+    for r in all_cred:
+        dt = parse_data_br(r[9]) or parse_data_br(r[14])
+        if dt: anos_set.add(str(dt.year))
+
+    anos_opcoes = sorted(list(anos_set))
+
+    # Filtra as 3 frentes pelo Mês e Ano selecionados
+    dem_filtradas = [r for r in all_demands if bate_mes_ano(r[3], f_mes, f_ano)]
+    av_filtradas = [r for r in all_avulsas if bate_mes_ano(r[3], f_mes, f_ano)]
+    cred_filtradas = [r for r in all_cred if bate_mes_ano(r[9] or r[14], f_mes, f_ano)]
+    cred_atual_filtradas = [r for r in cred_filtradas if str(r[13] or '').strip().upper() == 'SIM']
+
+    t_rotina = len(dem_filtradas)
+    t_avulsa = len(av_filtradas)
+    t_cred_total = len(cred_filtradas)
+    t_cred_atual = len(cred_atual_filtradas)
     d_total_geral = t_rotina + t_avulsa + t_cred_atual
-    
-    c.execute("SELECT status, COUNT(*) FROM demands GROUP BY status")
-    rot_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
-    
-    c.execute("SELECT status, COUNT(*) FROM demandas_avulsas GROUP BY status")
-    av_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
-    
+
+    rot_por_status = {}
+    prod_por_colab = {}
+    rot_por_tipo = {}
+    sla_em_dia = 0; sla_atencao = 0; sla_urgente = 0; sla_critico = 0
+    total_ativas_dem = 0
+
+    for r in dem_filtradas:
+        st = str(r[0] or 'Pendente').strip()
+        tp = str(r[1] or 'Não Identificada').strip()
+        resp = str(r[2] or 'Nenhum').strip()
+        dt_ent = r[3]
+
+        rot_por_status[st] = rot_por_status.get(st, 0) + 1
+        rot_por_tipo[tp] = rot_por_tipo.get(tp, 0) + 1
+        if st == 'Finalizada' and resp != 'Nenhum':
+            prod_por_colab[resp] = prod_por_colab.get(resp, 0) + 1
+
+        s = calcular_sla(dt_ent, st)
+        if s >= 0:
+            total_ativas_dem += 1
+            if s >= 6: sla_critico += 1
+            elif s >= 4: sla_urgente += 1
+            elif s >= 2: sla_atencao += 1
+            else: sla_em_dia += 1
+
+    av_por_status = {}
+    for r in av_filtradas:
+        st = str(r[0] or 'Pendente').strip()
+        dt_ent = r[3]
+        av_por_status[st] = av_por_status.get(st, 0) + 1
+
+        s = calcular_sla(dt_ent, st)
+        if s >= 0:
+            total_ativas_dem += 1
+            if s >= 6: sla_critico += 1
+            elif s >= 4: sla_urgente += 1
+            elif s >= 2: sla_atencao += 1
+            else: sla_em_dia += 1
+
     todos_status = list(TODOS_STATUS_ORDEM)
     for st in list(rot_por_status.keys()) + list(av_por_status.keys()):
         if st not in todos_status:
             todos_status.append(st)
-            
+
     cores_status = {
-        'Pendente': '#f0ad4e',
-        'Recebida': '#5bc0de',
-        'Em Análise': '#0275d8',
-        'Em andamento': '#0dcaf0',
-        'Aguardando 90 dias': '#6f42c1',
-        'Aguardando Retorno': '#fd7e14',
-        'Aguardando Área Demandante': '#d63384',
-        'Devolvido': '#dc3545',
-        'Finalizada': '#198754',
-        'Concluído': '#20c997',
-        'Cancelada': '#6c757d'
+        'Pendente': '#f0ad4e', 'Recebida': '#5bc0de', 'Em Análise': '#0275d8',
+        'Em andamento': '#0dcaf0', 'Aguardando 90 dias': '#6f42c1', 'Aguardando Retorno': '#fd7e14',
+        'Aguardando Área Demandante': '#d63384', 'Devolvido': '#dc3545',
+        'Finalizada': '#198754', 'Concluído': '#20c997', 'Cancelada': '#6c757d'
     }
-    
+
     status_cards = []
     for st in todos_status:
         qtd_r = rot_por_status.get(st, 0)
@@ -2667,37 +2775,18 @@ def dashboard_graficos():
         soma_st = qtd_r + qtd_a
         if soma_st > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Concluído']:
             status_cards.append({
-                'nome': st,
-                'rotina': qtd_r,
-                'avulsa': qtd_a,
-                'total': soma_st,
-                'cor': cores_status.get(st, '#004b87')
+                'nome': st, 'rotina': qtd_r, 'avulsa': qtd_a,
+                'total': soma_st, 'cor': cores_status.get(st, '#004b87')
             })
-    
-    c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
-    pendentes_rotina = c.fetchall()
-    c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
-    pendentes_avulsas = c.fetchall()
-    
-    todas_pendentes = pendentes_rotina + pendentes_avulsas
-    total_ativas = 0
-    sla_em_dia = 0; sla_atencao = 0; sla_urgente = 0; sla_critico = 0
-    for p in todas_pendentes:
-        s = calcular_sla(p[0], p[1])
-        if s < 0: continue
-        total_ativas += 1
-        if s >= 6: sla_critico += 1
-        elif s >= 4: sla_urgente += 1
-        elif s >= 2: sla_atencao += 1
-        else: sla_em_dia += 1
 
-    c.execute("SELECT * FROM credenciamento_fases WHERE ultima_fase='SIM'")
-    rows_cred_atual = c.fetchall()
     cred_parecer = {}
-    cred_sla = {"ativos": 0, "no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0}
-    for rc in rows_cred_atual:
+    cred_fases_dict = {}
+    cred_sla = {"ativos": 0, "no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0, "alerta_90d": 0}
+    for rc in cred_atual_filtradas:
         par = str(rc[20] or 'SEM PARECER').strip().upper()
         cred_parecer[par] = cred_parecer.get(par, 0) + 1
+        fa = str(rc[12] or 'SEM FASE').strip()
+        cred_fases_dict[fa] = cred_fases_dict.get(fa, 0) + 1
         info_c = calcular_sla_credenciamento(rc)
         if info_c["ativo"]:
             cred_sla["ativos"] += 1
@@ -2705,103 +2794,87 @@ def dashboard_graficos():
             elif info_c["faixa_sla"] == "Urgente": cred_sla["urgente"] += 1
             elif info_c["faixa_sla"] == "Atenção": cred_sla["atencao"] += 1
             else: cred_sla["no_prazo"] += 1
+            if info_c["estourou_90d"]: cred_sla["alerta_90d"] += 1
 
-    total_ativas_unificado = total_ativas + cred_sla["ativos"]
+    nome_mes_map = dict(MESES_NOMES)
+    if f_mes == 'Todos' and f_ano == 'Todos':
+        label_periodo = "Todo o Período"
+    elif f_mes != 'Todos' and f_ano != 'Todos':
+        label_periodo = f"{nome_mes_map.get(f_mes, f_mes)} / {f_ano}"
+    elif f_mes != 'Todos':
+        label_periodo = f"Mês {nome_mes_map.get(f_mes, f_mes)} (Todos os Anos)"
+    else:
+        label_periodo = f"Ano {f_ano} (Todos os Meses)"
+
+    return {
+        "d_total_geral": d_total_geral, "t_rotina": t_rotina, "t_avulsa": t_avulsa,
+        "t_cred_total": t_cred_total, "t_cred_atual": t_cred_atual,
+        "status_cards": status_cards, "cred_parecer": cred_parecer,
+        "cred_fases_dict": cred_fases_dict, "cred_sla": cred_sla,
+        "sla_em_dia": sla_em_dia, "sla_atencao": sla_atencao,
+        "sla_urgente": sla_urgente, "sla_critico": sla_critico,
+        "total_ativas_unificado": total_ativas_dem + cred_sla["ativos"],
+        "dados_prod": sorted(prod_por_colab.items(), key=lambda x: x[1], reverse=True),
+        "dados_tipo": sorted(rot_por_tipo.items(), key=lambda x: x[1], reverse=True),
+        "anos_opcoes": anos_opcoes, "label_periodo": label_periodo
+    }
+
+@app.route('/demandas/dashboard_graficos')
+def dashboard_graficos():
+    if 'user' not in session: return redirect(url_for('login'))
+    f_mes = request.args.get('mes', 'Todos')
+    f_ano = request.args.get('ano', 'Todos')
+    dados = coletar_dados_dashboard(f_mes, f_ano)
 
     fig1, ax1 = plt.subplots(figsize=(6,4))
-    c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to")
-    dados_prod = c.fetchall()
-    if dados_prod:
-        ax1.bar([r[0] for r in dados_prod], [r[1] for r in dados_prod], color='#5cb85c')
-        ax1.set_xticklabels([r[0] for r in dados_prod], rotation=45, ha='right')
+    if dados["dados_prod"]:
+        ax1.bar([r[0] for r in dados["dados_prod"]], [r[1] for r in dados["dados_prod"]], color='#5cb85c')
+        ax1.set_xticklabels([r[0] for r in dados["dados_prod"]], rotation=45, ha='right')
+    else:
+        ax1.text(0.5, 0.5, "Sem registros no período", ha='center', va='center')
     buf1 = BytesIO(); fig1.tight_layout(); fig1.savefig(buf1, format="png"); buf1.seek(0)
     chart_prod = base64.b64encode(buf1.read()).decode('utf-8'); plt.close(fig1)
 
     fig2, ax2 = plt.subplots(figsize=(6,4))
-    c.execute("SELECT type, COUNT(*) FROM demands GROUP BY type")
-    dados_tipo = c.fetchall()
-    if dados_tipo:
-        ax2.bar([r[0] for r in dados_tipo], [r[1] for r in dados_tipo], color='#008CBA')
-        ax2.set_xticklabels([r[0] for r in dados_tipo], rotation=45, ha='right')
+    if dados["dados_tipo"]:
+        ax2.bar([r[0] for r in dados["dados_tipo"]], [r[1] for r in dados["dados_tipo"]], color='#008CBA')
+        ax2.set_xticklabels([r[0] for r in dados["dados_tipo"]], rotation=45, ha='right')
+    else:
+        ax2.text(0.5, 0.5, "Sem registros no período", ha='center', va='center')
     buf2 = BytesIO(); fig2.tight_layout(); fig2.savefig(buf2, format="png"); buf2.seek(0)
     chart_tipo = base64.b64encode(buf2.read()).decode('utf-8'); plt.close(fig2)
-    conn.close()
+
     return render_template_string(
         TELA_DASHBOARD_GRAFICOS,
-        d_total_geral=d_total_geral, t_rotina=t_rotina, t_avulsa=t_avulsa,
-        t_cred_total=t_cred_total, t_cred_atual=t_cred_atual,
-        status_cards=status_cards, cred_parecer=cred_parecer, cred_sla=cred_sla,
+        d_total_geral=dados["d_total_geral"], t_rotina=dados["t_rotina"], t_avulsa=dados["t_avulsa"],
+        t_cred_total=dados["t_cred_total"], t_cred_atual=dados["t_cred_atual"],
+        status_cards=dados["status_cards"], cred_parecer=dados["cred_parecer"], cred_sla=dados["cred_sla"],
         chart_prod=chart_prod, chart_tipo=chart_tipo,
-        sla_em_dia=sla_em_dia, sla_atencao=sla_atencao, sla_urgente=sla_urgente, sla_critico=sla_critico,
-        total_ativas_unificado=total_ativas_unificado
+        sla_em_dia=dados["sla_em_dia"], sla_atencao=dados["sla_atencao"],
+        sla_urgente=dados["sla_urgente"], sla_critico=dados["sla_critico"],
+        total_ativas_unificado=dados["total_ativas_unificado"],
+        meses_opcoes=MESES_NOMES, anos_opcoes=dados["anos_opcoes"],
+        f_mes=f_mes, f_ano=f_ano, label_periodo=dados["label_periodo"]
     )
 
 # -------- GERADOR DE RELATÓRIO EXECUTIVO GERAL EM PDF --------
 @app.route('/demandas/relatorio_pdf')
 def exportar_relatorio_pdf():
     if 'user' not in session: return redirect(url_for('login'))
-    inicializar_tabelas_extras()
-    conn = conectar_db(); c = conn.cursor()
+    f_mes = request.args.get('mes', 'Todos')
+    f_ano = request.args.get('ano', 'Todos')
+    dados = coletar_dados_dashboard(f_mes, f_ano)
 
-    c.execute("SELECT COUNT(*) FROM demands"); t_rotina = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM demandas_avulsas"); t_avulsa = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM credenciamento_fases WHERE ultima_fase='SIM'"); t_cred_atual = c.fetchone()[0]
-    d_total_geral = t_rotina + t_avulsa + t_cred_atual
-
-    c.execute("SELECT status, COUNT(*) FROM demands GROUP BY status")
-    rot_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
-    c.execute("SELECT status, COUNT(*) FROM demandas_avulsas GROUP BY status")
-    av_por_status = {str(r[0]).strip(): r[1] for r in c.fetchall() if r[0]}
-
-    todos_status = list(TODOS_STATUS_ORDEM)
-    for st in list(rot_por_status.keys()) + list(av_por_status.keys()):
-        if st not in todos_status: todos_status.append(st)
-
-    tabela_status_rows = []
-    for st in todos_status:
-        qr = rot_por_status.get(st, 0)
-        qa = av_por_status.get(st, 0)
-        if (qr + qa) > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Concluído']:
-            tabela_status_rows.append([st, str(qr), str(qa), str(qr + qa)])
-
-    c.execute("SELECT data_entrada, status FROM demands WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
-    pend_rot = c.fetchall()
-    c.execute("SELECT data_entrada, status FROM demandas_avulsas WHERE status NOT IN ('Finalizada', 'Concluído', 'Devolvido', 'Cancelada')")
-    pend_av = c.fetchall()
-
-    sla_dem = {"no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0}
-    for p in (pend_rot + pend_av):
-        s = calcular_sla(p[0], p[1])
-        if s < 0: continue
-        if s >= 6: sla_dem["critico"] += 1
-        elif s >= 4: sla_dem["urgente"] += 1
-        elif s >= 2: sla_dem["atencao"] += 1
-        else: sla_dem["no_prazo"] += 1
-
-    c.execute("SELECT * FROM credenciamento_fases WHERE ultima_fase='SIM'")
-    rows_cred = c.fetchall()
-    cred_parecer = {}
-    cred_fases_dict = {}
-    sla_cred = {"no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0, "alerta_90d": 0}
-    for rc in rows_cred:
-        par = str(rc[20] or 'SEM PARECER').strip().upper()
-        cred_parecer[par] = cred_parecer.get(par, 0) + 1
-        fa = str(rc[12] or 'SEM FASE').strip()
-        cred_fases_dict[fa] = cred_fases_dict.get(fa, 0) + 1
-        info_c = calcular_sla_credenciamento(rc)
-        if info_c["ativo"]:
-            if info_c["faixa_sla"] == "Crítico": sla_cred["critico"] += 1
-            elif info_c["faixa_sla"] == "Urgente": sla_cred["urgente"] += 1
-            elif info_c["faixa_sla"] == "Atenção": sla_cred["atencao"] += 1
-            else: sla_cred["no_prazo"] += 1
-            if info_c["estourou_90d"]: sla_cred["alerta_90d"] += 1
-
-    c.execute("SELECT assigned_to, COUNT(*) FROM demands WHERE status='Finalizada' AND assigned_to != 'Nenhum' GROUP BY assigned_to ORDER BY COUNT(*) DESC")
-    dados_prod = c.fetchall()
-
-    c.execute("SELECT type, COUNT(*) FROM demands GROUP BY type ORDER BY COUNT(*) DESC")
-    dados_tipo = c.fetchall()
-    conn.close()
+    tabela_status_rows = [[c['nome'], str(c['rotina']), str(c['avulsa']), str(c['total'])] for c in dados["status_cards"]]
+    sla_dem = {
+        "no_prazo": dados["sla_em_dia"], "atencao": dados["sla_atencao"],
+        "urgente": dados["sla_urgente"], "critico": dados["sla_critico"]
+    }
+    sla_cred = dados["cred_sla"]
+    cred_parecer = dados["cred_parecer"]
+    cred_fases_dict = dados["cred_fases_dict"]
+    dados_prod = dados["dados_prod"]
+    dados_tipo = dados["dados_tipo"]
 
     pdf_buffer = BytesIO()
     dt_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -2811,12 +2884,12 @@ def exportar_relatorio_pdf():
         fig1.patch.set_facecolor('#ffffff')
 
         fig1.text(0.04, 0.94, "POSTAL SAÚDE - CENTRAL DE OPERAÇÕES (COCAP)", fontsize=16, fontweight='bold', color='#004b87')
-        fig1.text(0.04, 0.91, f"Relatório Executivo Geral do Cenário Operacional | Emitido em: {dt_emissao} por {session.get('user', 'Sistema')}", fontsize=10, color='#555555')
+        fig1.text(0.04, 0.91, f"Relatório Executivo Geral ({dados['label_periodo']}) | Emitido em: {dt_emissao} por {session.get('user', 'Sistema')}", fontsize=10, color='#555555')
 
         ax_kpi = fig1.add_axes([0.04, 0.77, 0.92, 0.11])
         ax_kpi.axis('off')
         ax_kpi.set_title("1. Volume Consolidado das 3 Frentes Operacionais", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=6)
-        kpi_data = [[f"{d_total_geral}", f"{t_rotina}", f"{t_avulsa}", f"{t_cred_atual}"]]
+        kpi_data = [[f"{dados['d_total_geral']}", f"{dados['t_rotina']}", f"{dados['t_avulsa']}", f"{dados['t_cred_atual']}"]]
         kpi_cols = ["TOTAL GERAL CONSOLIDADO", "1. Rotinas (PDFs)", "2. Demandas Avulsas", "3. Credenciamento (Fase Atual)"]
         t1 = ax_kpi.table(cellText=kpi_data, colLabels=kpi_cols, loc='center', cellLoc='center')
         t1.auto_set_font_size(False); t1.set_fontsize(11); t1.scale(1, 2.0)
@@ -2876,7 +2949,7 @@ def exportar_relatorio_pdf():
         fig2.patch.set_facecolor('#ffffff')
 
         fig2.text(0.04, 0.94, "POSTAL SAÚDE - PRODUTIVIDADE & CREDENCIAMENTO EM FASES", fontsize=15, fontweight='bold', color='#004b87')
-        fig2.text(0.04, 0.91, f"Página 2 - Análise de Produtividade, Tipos de Demanda e Pipeline de Credenciamento ({dt_emissao})", fontsize=9.5, color='#555555')
+        fig2.text(0.04, 0.91, f"Página 2 - Período: {dados['label_periodo']} ({dt_emissao})", fontsize=9.5, color='#555555')
 
         ax_p1 = fig2.add_axes([0.06, 0.54, 0.41, 0.31])
         if dados_prod:
@@ -2921,7 +2994,7 @@ def exportar_relatorio_pdf():
                 elif r_i % 2 == 0:
                     cell.set_facecolor('#f8f9fa')
         else:
-            ax_cf.text(0.5, 0.5, "Nenhum registro carregado no módulo Credenciamento - Fases.", ha='center', va='center', fontsize=10, color='#777777')
+            ax_cf.text(0.5, 0.5, "Nenhum registro encontrado no módulo Credenciamento - Fases para este período.", ha='center', va='center', fontsize=10, color='#777777')
 
         pdf.savefig(fig2)
         plt.close(fig2)
