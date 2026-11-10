@@ -35,32 +35,6 @@ def inicializar_tabelas_extras():
         is_postgres = "psycopg2" in str(type(conn))
         id_col = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
         
-        # Garante colunas de primeiro login e solicitações de senha na tabela users
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE,
-                password TEXT,
-                role TEXT,
-                first_login INTEGER DEFAULT 1
-            )
-        """)
-        try:
-            c.execute("ALTER TABLE users ADD COLUMN first_login INTEGER DEFAULT 1")
-        except Exception:
-            pass
-
-        # Tabela de solicitações de redefinição de senha
-        c.execute(f"""
-            CREATE TABLE IF NOT EXISTS password_requests (
-                id {id_col},
-                username TEXT,
-                status TEXT DEFAULT 'PENDENTE',
-                data_solicitacao TEXT
-            )
-        """)
-
-        # Tabela do Módulo Credenciamento - Fases
         c.execute(f"""
             CREATE TABLE IF NOT EXISTS credenciamento_fases (
                 id {id_col},
@@ -96,7 +70,6 @@ def inicializar_tabelas_extras():
             )
         """)
 
-        # Tabela para guardar os arquivos PDF carregados na nuvem
         c.execute("""
             CREATE TABLE IF NOT EXISTS demands_pdfs (
                 demand_id INTEGER PRIMARY KEY,
@@ -114,7 +87,7 @@ def sincronizar_sequencias():
         conn = conectar_db()
         if conn and "psycopg2" in str(type(conn)):
             c = conn.cursor()
-            for tabela in ['demands', 'demandas_avulsas', 'users', 'credenciamento_fases', 'password_requests']:
+            for tabela in ['demands', 'demandas_avulsas', 'users', 'credenciamento_fases']:
                 try:
                     c.execute(f"SELECT setval(pg_get_serial_sequence('{tabela}', 'id'), COALESCE((SELECT MAX(id) FROM {tabela}), 0) + 1, false);")
                     conn.commit()
@@ -331,32 +304,7 @@ TELA_LOGIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
     <form method="POST" action="/">
         <div class="mb-3"><label class="form-label fw-bold">Usuário</label><input type="text" name="username" class="form-control" required></div>
         <div class="mb-4"><label class="form-label fw-bold">Senha</label><input type="password" name="password" class="form-control" required></div>
-        <button type="submit" class="btn w-100 py-2 mb-2" style="background-color: #004b87; color: white; font-weight: bold;">Entrar no Sistema</button>
-        <div class="text-center mt-2"><a href="/solicitar_senha" class="small text-muted">Esqueci minha senha / Solicitar troca</a></div>
-    </form>
-</div></body></html>"""
-
-TELA_SOLICITAR_SENHA = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Solicitar Senha - COCAP</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body style="background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh;">
-<div style="border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px;">
-    <div class="text-center mb-4"><h3 style="color: #004b87; font-weight: 800;">POSTAL SAÚDE</h3><p class="text-muted">Solicitação de Redefinição de Senha</p></div>
-    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-    <form method="POST" action="/solicitar_senha">
-        <div class="mb-3"><label class="form-label fw-bold">Informe seu Usuário</label><input type="text" name="username" class="form-control" required></div>
-        <button type="submit" class="btn btn-warning w-100 py-2 fw-bold mb-2">Enviar Solicitação ao Admin</button>
-        <a href="/" class="btn btn-outline-secondary w-100 btn-sm">Voltar ao Login</a>
-    </form>
-</div></body></html>"""
-
-TELA_PRIMEIRO_ACESSO = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Primeiro Acesso - Troca de Senha</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body style="background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh;">
-<div style="border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 40px; background: white; width: 100%; max-width: 400px;">
-    <div class="text-center mb-4"><h3 style="color: #004b87; font-weight: 800;">PRIMEIRO ACESSO</h3><p class="text-muted">Por segurança, altere sua senha padrão para continuar.</p></div>
-    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-    <form method="POST" action="/primeiro_acesso">
-        <div class="mb-3"><label class="form-label fw-bold">Nova Senha</label><input type="password" name="nova_senha" class="form-control" required></div>
-        <div class="mb-4"><label class="form-label fw-bold">Confirme a Nova Senha</label><input type="password" name="confirma_senha" class="form-control" required></div>
-        <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Salvar Nova Senha e Entrar</button>
+        <button type="submit" class="btn w-100 py-2" style="background-color: #004b87; color: white; font-weight: bold;">Entrar no Sistema</button>
     </form>
 </div></body></html>"""
 
@@ -364,11 +312,7 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
 <body style="background-color: #f0f2f5;">
 <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #004b87;">
   <div class="container-fluid"><a class="navbar-brand fw-bold" href="#">COCAP Web</a>
-    <div class="d-flex text-white align-items-center">
-        <span class="me-3">Olá, <strong>{{ user }}</strong> ({{ role }})</span>
-        <a href="/alterar_senha" class="btn btn-outline-light btn-sm me-2">🔑 Alterar Senha</a>
-        <a href="/logout" class="btn btn-danger btn-sm">Sair</a>
-    </div>
+    <div class="d-flex text-white align-items-center"><span class="me-3">Olá, <strong>{{ user }}</strong> ({{ role }})</span><a href="/logout" class="btn btn-danger btn-sm">Sair</a></div>
   </div>
 </nav>
 <div class="container mt-5 text-center">
@@ -399,23 +343,7 @@ TELA_DASHBOARD = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8
             </div>
         </div>
     </div>
-    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-6"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD, Usuários & Aprovação de Senhas)</a></div></div>{% endif %}
-</div></body></html>"""
-
-TELA_ALTERAR_SENHA = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Alterar Senha</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-<body style="background-color: #f0f2f5;">
-<nav class="navbar navbar-dark bg-dark"><div class="container-fluid"><a href="/dashboard" class="btn btn-outline-light btn-sm">⬅ Voltar ao Portal</a><span class="text-white fw-bold">Alteração de Senha</span></div></nav>
-<div class="container mt-5" style="max-width: 450px;">
-    <div class="card shadow-sm border-0 p-4 bg-white">
-        <h4 class="fw-bold text-primary mb-3">🔑 Alterar Minha Senha</h4>
-        {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-        <form method="POST" action="/alterar_senha">
-            <div class="mb-3"><label class="form-label fw-bold">Senha Atual</label><input type="password" name="senha_atual" class="form-control" required></div>
-            <div class="mb-3"><label class="form-label fw-bold">Nova Senha</label><input type="password" name="nova_senha" class="form-control" required></div>
-            <div class="mb-4"><label class="form-label fw-bold">Confirme a Nova Senha</label><input type="password" name="confirma_senha" class="form-control" required></div>
-            <button type="submit" class="btn btn-success w-100 fw-bold py-2">Atualizar Senha</button>
-        </form>
-    </div>
+    {% if role == 'admin' %}<div class="row justify-content-center mt-4"><div class="col-md-6"><a href="/admin" class="btn btn-secondary w-100 fw-bold py-3 shadow-sm border-0">⚙️ Painel Administrativo (BD & Usuários)</a></div></div>{% endif %}
 </div></body></html>"""
 
 TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de Demandas</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
@@ -458,7 +386,7 @@ TELA_HUB_DEMANDAS = """<!DOCTYPE html><html lang="pt-BR"><head><title>Módulo de
             <div class="card shadow-sm border-0 h-100 p-4">
                 <h1 class="mb-3">📊</h1>
                 <h5 class="fw-bold text-secondary">Dashboard Gerencial</h5>
-                <p class="text-muted small mb-4">Visão consolidada das 3 frentes, indicadores de SLA, gráficos e PDF.</p>
+                <p class="text-muted small mb-4">Visão consolidada das 3 frentes com filtro por Mês/Ano, SLA e PDF.</p>
                 <a href="/demandas/dashboard_graficos" class="btn btn-info text-white w-100 py-3 fw-bold mt-auto">Ver Dashboard</a>
             </div>
         </div>
@@ -978,38 +906,6 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
 <div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
     <div class="row">
-        <!-- Solicitações de Senha Pendentes -->
-        <div class="col-md-12 mb-4">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-warning text-dark fw-bold">🔑 Solicitações Pendentes de Redefinição de Senha</div>
-                <div class="card-body">
-                    {% if pedidos_senha %}
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light"><tr><th>ID</th><th>Usuário</th><th>Data Solicitação</th><th>Ações</th></tr></thead>
-                        <tbody>
-                            {% for p in pedidos_senha %}
-                            <tr>
-                                <td>{{ p[0] }}</td>
-                                <td class="fw-bold">{{ p[1] }}</td>
-                                <td>{{ p[3] }}</td>
-                                <td>
-                                    <form method="POST" action="/admin/aprovar_senha" style="display:inline;">
-                                        <input type="hidden" name="req_id" value="{{ p[0] }}">
-                                        <input type="hidden" name="username" value="{{ p[1] }}">
-                                        <button type="submit" class="btn btn-success btn-sm fw-bold">Aprovar & Resetar para Senha Padrão (123456)</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <p class="text-muted mb-0">Nenhuma solicitação de senha pendente no momento.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
         <div class="col-md-12 mb-4">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-dark text-white fw-bold">💾 Gestão de Banco de Dados</div>
@@ -1035,7 +931,7 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
                     <form method="POST" action="/admin"><input type="hidden" name="acao" value="adicionar">
                         <div class="row g-2 align-items-end">
                             <div class="col-md-4"><label class="form-label small fw-bold">Usuário</label><input type="text" name="username" class="form-control" required></div>
-                            <div class="col-md-3"><label class="form-label small fw-bold">Senha Padrão Inicial</label><input type="password" name="password" class="form-control" required></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Senha</label><input type="password" name="password" class="form-control" required></div>
                             <div class="col-md-3"><label class="form-label small fw-bold">Nível</label><select name="role" class="form-select"><option value="user">User</option><option value="admin">Admin</option></select></div>
                             <div class="col-md-2"><button type="submit" class="btn btn-primary w-100 fw-bold">Salvar</button></div>
                         </div>
@@ -1044,10 +940,8 @@ TELA_ADMIN = """<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><t
             </div>
             <div class="card shadow-sm border-0">
                 <div class="card-body">
-                    <table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>Usuário</th><th>Nível</th><th>Primeiro Acesso Pendente</th><th>Ações</th></tr></thead>
-                        <tbody>{% for u in usuarios %}<tr><td>{{ u[0] }}</td><td>{{ u[1] }}</td><td><span class="badge bg-{{ 'dark' if u[2] == 'admin' else 'secondary' }}">{{ u[2] | upper }}</span></td>
-                        <td><span class="badge bg-{{ 'warning text-dark' if u[4] == 1 else 'success' }}">{{ 'Sim (Exige Troca)' if u[4] == 1 else 'Normal' }}</span></td>
-                        <td>
+                    <table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>Usuário</th><th>Nível</th><th>Ações</th></tr></thead>
+                        <tbody>{% for u in usuarios %}<tr><td>{{ u[0] }}</td><td>{{ u[1] }}</td><td><span class="badge bg-{{ 'dark' if u[2] == 'admin' else 'secondary' }}">{{ u[2] | upper }}</span></td><td>
                             {% if u[1] != 'admin' and u[1] != user %}<form method="POST" action="/admin" style="display:inline;"><input type="hidden" name="acao" value="eliminar"><input type="hidden" name="user_id" value="{{ u[0] }}"><button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Excluir o usuário {{ u[1] }}?');">Excluir</button></form>
                             {% else %}<span class="text-muted small">Sistema</span>{% endif %}</td></tr>{% endfor %}
                         </tbody>
@@ -1643,7 +1537,7 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                         <label class="form-label small">Coluna: Tipo Prestador</label>
                         <select id="col_tipo_pos" name="col_tipo_pos" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
                         <label class="form-label small">Coluna: Especialidade</label>
-                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
+                        <select id="col_esp_pos" name="col_esp_pos" class="form-select form-select-sm"><option value="">Aguardando arquivo...</option></select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-success">2. Base Operadora Intermediária</label>
@@ -1651,7 +1545,7 @@ TELA_PENTEFINO_REGIONAL = """<!DOCTYPE html><html lang="pt-BR"><head><title>Cruz
                         <label class="form-label small">Coluna: Tipo Prestador</label>
                         <select id="col_tipo_op" name="col_tipo_op" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
                         <label class="form-label small">Coluna: Especialidade</label>
-                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm mb-2"><option value="">Aguardando arquivo...</option></select>
+                        <select id="col_esp_op" name="col_esp_op" class="form-select form-select-sm"><option value="">Aguardando arquivo...</option></select>
                     </div>
                 </div>
                 <div class="mb-4 text-center">
@@ -2024,91 +1918,8 @@ def salvar_pdf_no_banco(conn, demand_id, filename, raw_pdf_bytes):
 
 
 # ==========================================
-# ROTAS DO SERVIDOR WEB E SEGURANÇA
+# ROTAS DO SERVIDOR WEB E APIs INVISÍVEIS
 # ==========================================
-
-@app.route('/solicitar_senha', methods=['GET', 'POST'])
-def solicitar_senha():
-    if request.method == 'POST':
-        user = request.form.get('username', '').strip()
-        conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-        c.execute(f"SELECT id FROM users WHERE username={ph}", (user,))
-        if c.fetchone():
-            c.execute(f"INSERT INTO password_requests (username, status, data_solicitacao) VALUES ({ph}, 'PENDENTE', {ph})", 
-                      (user, datetime.now().strftime("%d/%m/%Y %H:%M")))
-            conn.commit()
-            flash("Solicitação enviada ao Administrador com sucesso!", "success")
-        else:
-            flash("Nome de usuário não encontrado.", "danger")
-        conn.close()
-        return redirect(url_for('login'))
-    return render_template_string(TELA_SOLICITAR_SENHA)
-
-@app.route('/primeiro_acesso', methods=['GET', 'POST'])
-def primeiro_acesso():
-    if 'user_temp' not in session:
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        p1 = request.form.get('nova_senha', '').strip()
-        p2 = request.form.get('confirma_senha', '').strip()
-        if not p1 or p1 != p2:
-            flash("As senhas não coincidem ou estão vazias.", "danger")
-            return render_template_string(TELA_PRIMEIRO_ACESSO)
-            
-        user = session['user_temp']
-        conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-        c.execute(f"UPDATE users SET password={ph}, first_login=0 WHERE username={ph}", (p1, user))
-        conn.commit(); conn.close()
-        session['user'] = user
-        c_role = 'admin' if user == 'admin' else 'user'
-        session['role'] = c_role
-        session.pop('user_temp', None)
-        flash("Senha atualizada com sucesso! Bem-vindo.", "success")
-        return redirect(url_for('dashboard'))
-    return render_template_string(TELA_PRIMEIRO_ACESSO)
-
-@app.route('/alterar_senha', methods=['GET', 'POST'])
-def alterar_senha():
-    if 'user' not in session: return redirect(url_for('login'))
-    if request.method == 'POST':
-        atual = request.form.get('senha_atual', '').strip()
-        nova = request.form.get('nova_senha', '').strip()
-        conf = request.form.get('confirma_senha', '').strip()
-        if not nova or nova != conf:
-            flash("A nova senha e a confirmação não conferem.", "danger")
-            return render_template_string(TELA_ALTERAR_SENHA)
-            
-        user = session['user']
-        conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-        c.execute(f"SELECT id FROM users WHERE username={ph} AND password={ph}", (user, atual))
-        if c.fetchone():
-            c.execute(f"UPDATE users SET password={ph}, first_login=0 WHERE username={ph}", (nova, user))
-            conn.commit(); conn.close()
-            flash("Senha alterada com sucesso!", "success")
-            return redirect(url_for('dashboard'))
-        else:
-            conn.close()
-            flash("Senha atual incorreta.", "danger")
-    return render_template_string(TELA_ALTERAR_SENHA)
-
-@app.route('/admin/aprovar_senha', methods=['POST'])
-def admin_aprovar_senha():
-    if 'user' not in session or session.get('role') != 'admin': return redirect(url_for('dashboard'))
-    req_id = request.form.get('req_id')
-    username = request.form.get('username')
-    conn = conectar_db(); c = conn.cursor(); ph = get_ph(conn)
-    try:
-        # Reseta a senha para 123456 e exige alteração no primeiro acesso
-        c.execute(f"UPDATE users SET password='123456', first_login=1 WHERE username={ph}", (username,))
-        c.execute(f"UPDATE password_requests SET status='APROVADO' WHERE id={ph}", (req_id,))
-        conn.commit()
-        flash(f"Senha do usuário '{username}' resetada para o padrão (123456) com sucesso!", "success")
-    except Exception as e:
-        conn.rollback()
-        flash(f"Erro ao aprovar solicitação: {e}", "danger")
-    finally:
-        conn.close()
-    return redirect(url_for('admin'))
 
 @app.route('/api/ler_cabecalhos', methods=['POST'])
 def api_ler_cabecalhos():
@@ -2161,14 +1972,11 @@ def login():
             return render_template_string(TELA_LOGIN)
             
         c = conn.cursor(); ph = get_ph(conn)
-        c.execute(f"SELECT id, role, first_login FROM users WHERE username={ph} AND password={ph}", (user, password))
+        c.execute(f"SELECT id, role FROM users WHERE username={ph} AND password={ph}", (user, password))
         res = c.fetchone()
         conn.close()
         
         if res:
-            if res[2] == 1:
-                session['user_temp'] = user
-                return redirect(url_for('primeiro_acesso'))
             session['user'] = user; session['role'] = res[1]
             return redirect(url_for('dashboard'))
         else: flash("Usuário ou senha incorretos!", "danger")
@@ -2560,11 +2368,8 @@ def admin():
             c.execute(f"DELETE FROM users WHERE id={ph}", (uid,))
             conn.commit(); flash("Usuário excluído com sucesso!", "warning")
     c.execute("SELECT id, username, role, first_login FROM users ORDER BY id ASC")
-    usuarios = c.fetchall()
-    c.execute("SELECT * FROM password_requests WHERE status='PENDENTE' ORDER BY id ASC")
-    pedidos_senha = c.fetchall()
-    conn.close()
-    return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios, pedidos_senha=pedidos_senha)
+    usuarios = c.fetchall(); conn.close()
+    return render_template_string(TELA_ADMIN, user=session['user'], role=session['role'], usuarios=usuarios)
 
 @app.route('/admin/exportar')
 def exportar_backup():
@@ -2872,6 +2677,148 @@ def editar_rotina():
         conn.close()
     return redirect(url_for('demandas_rotinas'))
 
+def coletar_dados_dashboard(f_mes='Todos', f_ano='Todos'):
+    inicializar_tabelas_extras()
+    conn = conectar_db(); c = conn.cursor()
+
+    c.execute("SELECT status, type, assigned_to, data_entrada FROM demands")
+    all_demands = c.fetchall()
+
+    c.execute("SELECT status, tipo_demanda, responsavel, data_entrada FROM demandas_avulsas")
+    all_avulsas = c.fetchall()
+
+    c.execute("SELECT * FROM credenciamento_fases")
+    all_cred = c.fetchall()
+    conn.close()
+
+    # Coleta dinâmica dos anos existentes na base
+    anos_set = {"2025", "2026"}
+    for r in all_demands:
+        dt = parse_data_br(r[3])
+        if dt: anos_set.add(str(dt.year))
+    for r in all_avulsas:
+        dt = parse_data_br(r[3])
+        if dt: anos_set.add(str(dt.year))
+    for r in all_cred:
+        dt = parse_data_br(r[9]) or parse_data_br(r[14])
+        if dt: anos_set.add(str(dt.year))
+
+    anos_opcoes = sorted(list(anos_set))
+
+    # Filtra as 3 frentes pelo Mês e Ano selecionados
+    dem_filtradas = [r for r in all_demands if bate_mes_ano(r[3], f_mes, f_ano)]
+    av_filtradas = [r for r in all_avulsas if bate_mes_ano(r[3], f_mes, f_ano)]
+    cred_filtradas = [r for r in all_cred if bate_mes_ano(r[9] or r[14], f_mes, f_ano)]
+    cred_atual_filtradas = [r for r in cred_filtradas if str(r[13] or '').strip().upper() == 'SIM']
+
+    t_rotina = len(dem_filtradas)
+    t_avulsa = len(av_filtradas)
+    t_cred_total = len(cred_filtradas)
+    t_cred_atual = len(cred_atual_filtradas)
+    d_total_geral = t_rotina + t_avulsa + t_cred_atual
+
+    rot_por_status = {}
+    prod_por_colab = {}
+    rot_por_tipo = {}
+    sla_em_dia = 0; sla_atencao = 0; sla_urgente = 0; sla_critico = 0
+    total_ativas_dem = 0
+
+    for r in dem_filtradas:
+        st = str(r[0] or 'Pendente').strip()
+        tp = str(r[1] or 'Não Identificada').strip()
+        resp = str(r[2] or 'Nenhum').strip()
+        dt_ent = r[3]
+
+        rot_por_status[st] = rot_por_status.get(st, 0) + 1
+        rot_por_tipo[tp] = rot_por_tipo.get(tp, 0) + 1
+        if st == 'Finalizada' and resp != 'Nenhum':
+            prod_por_colab[resp] = prod_por_colab.get(resp, 0) + 1
+
+        s = calcular_sla(dt_ent, st)
+        if s >= 0:
+            total_ativas_dem += 1
+            if s >= 6: sla_critico += 1
+            elif s >= 4: sla_urgente += 1
+            elif s >= 2: sla_atencao += 1
+            else: sla_em_dia += 1
+
+    av_por_status = {}
+    for r in av_filtradas:
+        st = str(r[0] or 'Pendente').strip()
+        dt_ent = r[3]
+        av_por_status[st] = av_por_status.get(st, 0) + 1
+
+        s = calcular_sla(dt_ent, st)
+        if s >= 0:
+            total_ativas_dem += 1
+            if s >= 6: sla_critico += 1
+            elif s >= 4: sla_urgente += 1
+            elif s >= 2: sla_atencao += 1
+            else: sla_em_dia += 1
+
+    todos_status = list(TODOS_STATUS_ORDEM)
+    for st in list(rot_por_status.keys()) + list(av_por_status.keys()):
+        if st not in todos_status:
+            todos_status.append(st)
+
+    cores_status = {
+        'Pendente': '#f0ad4e', 'Recebida': '#5bc0de', 'Em Análise': '#0275d8',
+        'Em andamento': '#0dcaf0', 'Aguardando 90 dias': '#6f42c1', 'Aguardando Retorno': '#fd7e14',
+        'Aguardando Área Demandante': '#d63384', 'Devolvido': '#dc3545',
+        'Finalizada': '#198754', 'Concluído': '#20c997', 'Cancelada': '#6c757d'
+    }
+
+    status_cards = []
+    for st in todos_status:
+        qtd_r = rot_por_status.get(st, 0)
+        qtd_a = av_por_status.get(st, 0)
+        soma_st = qtd_r + qtd_a
+        if soma_st > 0 or st in ['Pendente', 'Em Análise', 'Aguardando 90 dias', 'Aguardando Retorno', 'Devolvido', 'Finalizada', 'Concluído']:
+            status_cards.append({
+                'nome': st, 'rotina': qtd_r, 'avulsa': qtd_a,
+                'total': soma_st, 'cor': cores_status.get(st, '#004b87')
+            })
+
+    cred_parecer = {}
+    cred_fases_dict = {}
+    cred_sla = {"ativos": 0, "no_prazo": 0, "atencao": 0, "urgente": 0, "critico": 0, "alerta_90d": 0}
+    for rc in cred_atual_filtradas:
+        par = str(rc[20] or 'SEM PARECER').strip().upper()
+        cred_parecer[par] = cred_parecer.get(par, 0) + 1
+        fa = str(rc[12] or 'SEM FASE').strip()
+        cred_fases_dict[fa] = cred_fases_dict.get(fa, 0) + 1
+        info_c = calcular_sla_credenciamento(rc)
+        if info_c["ativo"]:
+            cred_sla["ativos"] += 1
+            if info_c["faixa_sla"] == "Crítico": cred_sla["critico"] += 1
+            elif info_c["faixa_sla"] == "Urgente": cred_sla["urgente"] += 1
+            elif info_c["faixa_sla"] == "Atenção": cred_sla["atencao"] += 1
+            else: cred_sla["no_prazo"] += 1
+            if info_c["estourou_90d"]: cred_sla["alerta_90d"] += 1
+
+    nome_mes_map = dict(MESES_NOMES)
+    if f_mes == 'Todos' and f_ano == 'Todos':
+        label_periodo = "Todo o Período"
+    elif f_mes != 'Todos' and f_ano != 'Todos':
+        label_periodo = f"{nome_mes_map.get(f_mes, f_mes)} / {f_ano}"
+    elif f_mes != 'Todos':
+        label_periodo = f"Mês {nome_mes_map.get(f_mes, f_mes)} (Todos os Anos)"
+    else:
+        label_periodo = f"Ano {f_ano} (Todos os Meses)"
+
+    return {
+        "d_total_geral": d_total_geral, "t_rotina": t_rotina, "t_avulsa": t_avulsa,
+        "t_cred_total": t_cred_total, "t_cred_atual": t_cred_atual,
+        "status_cards": status_cards, "cred_parecer": cred_parecer,
+        "cred_fases_dict": cred_fases_dict, "cred_sla": cred_sla,
+        "sla_em_dia": sla_em_dia, "sla_atencao": sla_atencao,
+        "sla_urgente": sla_urgente, "sla_critico": sla_critico,
+        "total_ativas_unificado": total_ativas_dem + cred_sla["ativos"],
+        "dados_prod": sorted(prod_por_colab.items(), key=lambda x: x[1], reverse=True),
+        "dados_tipo": sorted(rot_por_tipo.items(), key=lambda x: x[1], reverse=True),
+        "anos_opcoes": anos_opcoes, "label_periodo": label_periodo
+    }
+
 @app.route('/demandas/dashboard_graficos')
 def dashboard_graficos():
     if 'user' not in session: return redirect(url_for('login'))
@@ -2908,6 +2855,156 @@ def dashboard_graficos():
         total_ativas_unificado=dados["total_ativas_unificado"],
         meses_opcoes=MESES_NOMES, anos_opcoes=dados["anos_opcoes"],
         f_mes=f_mes, f_ano=f_ano, label_periodo=dados["label_periodo"]
+    )
+
+# -------- GERADOR DE RELATÓRIO EXECUTIVO GERAL EM PDF --------
+@app.route('/demandas/relatorio_pdf')
+def exportar_relatorio_pdf():
+    if 'user' not in session: return redirect(url_for('login'))
+    f_mes = request.args.get('mes', 'Todos')
+    f_ano = request.args.get('ano', 'Todos')
+    dados = coletar_dados_dashboard(f_mes, f_ano)
+
+    tabela_status_rows = [[c['nome'], str(c['rotina']), str(c['avulsa']), str(c['total'])] for c in dados["status_cards"]]
+    sla_dem = {
+        "no_prazo": dados["sla_em_dia"], "atencao": dados["sla_atencao"],
+        "urgente": dados["sla_urgente"], "critico": dados["sla_critico"]
+    }
+    sla_cred = dados["cred_sla"]
+    cred_parecer = dados["cred_parecer"]
+    cred_fases_dict = dados["cred_fases_dict"]
+    dados_prod = dados["dados_prod"]
+    dados_tipo = dados["dados_tipo"]
+
+    pdf_buffer = BytesIO()
+    dt_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    with PdfPages(pdf_buffer) as pdf:
+        fig1 = plt.figure(figsize=(11.69, 8.27))
+        fig1.patch.set_facecolor('#ffffff')
+
+        fig1.text(0.04, 0.94, "POSTAL SAÚDE - CENTRAL DE OPERAÇÕES (COCAP)", fontsize=16, fontweight='bold', color='#004b87')
+        fig1.text(0.04, 0.91, f"Relatório Executivo Geral ({dados['label_periodo']}) | Emitido em: {dt_emissao} por {session.get('user', 'Sistema')}", fontsize=10, color='#555555')
+
+        ax_kpi = fig1.add_axes([0.04, 0.77, 0.92, 0.11])
+        ax_kpi.axis('off')
+        ax_kpi.set_title("1. Volume Consolidado das 3 Frentes Operacionais", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=6)
+        kpi_data = [[f"{dados['d_total_geral']}", f"{dados['t_rotina']}", f"{dados['t_avulsa']}", f"{dados['t_cred_atual']}"]]
+        kpi_cols = ["TOTAL GERAL CONSOLIDADO", "1. Rotinas (PDFs)", "2. Demandas Avulsas", "3. Credenciamento (Fase Atual)"]
+        t1 = ax_kpi.table(cellText=kpi_data, colLabels=kpi_cols, loc='center', cellLoc='center')
+        t1.auto_set_font_size(False); t1.set_fontsize(11); t1.scale(1, 2.0)
+        for (row_i, col_i), cell in t1.get_celld().items():
+            if row_i == 0:
+                cell.set_facecolor('#004b87'); cell.set_text_props(color='white', fontweight='bold', fontsize=9.5)
+            else:
+                cell.set_facecolor('#f0f4f8'); cell.set_text_props(fontweight='bold', fontsize=13, color='#002060')
+
+        ax_st = fig1.add_axes([0.04, 0.10, 0.46, 0.60])
+        ax_st.axis('off')
+        ax_st.set_title("2. Contagem Detalhada por Status (PDFs + Avulsas)", fontsize=11, fontweight='bold', loc='left', color='#004b87', pad=8)
+        if tabela_status_rows:
+            t_st = ax_st.table(cellText=tabela_status_rows, colLabels=["Status da Demanda", "PDFs", "Avulsas", "Total"], loc='upper center', cellLoc='center', colWidths=[0.46, 0.18, 0.18, 0.18])
+            t_st.auto_set_font_size(False); t_st.set_fontsize(9); t_st.scale(1, 1.55)
+            for (r_i, c_i), cell in t_st.get_celld().items():
+                if r_i == 0:
+                    cell.set_facecolor('#333333'); cell.set_text_props(color='white', fontweight='bold')
+                elif r_i % 2 == 0:
+                    cell.set_facecolor('#f8f9fa')
+
+        ax_sla = fig1.add_axes([0.56, 0.43, 0.40, 0.27])
+        categorias_sla = ["No Prazo\n(0-1d)", "Atenção\n(2-3d)", "Urgente\n(4-5d)", "Crítico\n(6+d)"]
+        vals_dem = [sla_dem["no_prazo"], sla_dem["atencao"], sla_dem["urgente"], sla_dem["critico"]]
+        vals_crd = [sla_cred["no_prazo"], sla_cred["atencao"], sla_cred["urgente"], sla_cred["critico"]]
+        x_pos = range(len(categorias_sla))
+        ax_sla.bar(x_pos, vals_dem, label='Demandas (PDF/Avulsa)', color='#0275d8', width=0.5)
+        ax_sla.bar(x_pos, vals_crd, bottom=vals_dem, label='Credenciamento (Ativos)', color='#fd7e14', width=0.5)
+        ax_sla.set_xticks(list(x_pos)); ax_sla.set_xticklabels(categorias_sla, fontsize=8.5)
+        ax_sla.set_title("3. Fila Ativa por Faixa de SLA (Unificado)", fontsize=11, fontweight='bold', color='#004b87')
+        ax_sla.legend(fontsize=8)
+        ax_sla.grid(axis='y', linestyle='--', alpha=0.4)
+
+        ax_res_sla = fig1.add_axes([0.56, 0.08, 0.40, 0.27])
+        ax_res_sla.axis('off')
+        ax_res_sla.set_title("4. Detalhamento da Fila de SLA (Em Aberto)", fontsize=10.5, fontweight='bold', loc='left', color='#004b87', pad=6)
+        rows_sla_tb = [
+            ["No Prazo (0 a 1 dia)", str(sla_dem["no_prazo"]), str(sla_cred["no_prazo"]), str(sla_dem["no_prazo"] + sla_cred["no_prazo"])],
+            ["Atenção (2 a 3 dias)", str(sla_dem["atencao"]), str(sla_cred["atencao"]), str(sla_dem["atencao"] + sla_cred["atencao"])],
+            ["Urgente (4 a 5 dias)", str(sla_dem["urgente"]), str(sla_cred["urgente"]), str(sla_dem["urgente"] + sla_cred["urgente"])],
+            ["Crítico (6+ dias)", str(sla_dem["critico"]), str(sla_cred["critico"]), str(sla_dem["critico"] + sla_cred["critico"])],
+            ["Alerta > 90 Dias (Geral)", "-", str(sla_cred["alerta_90d"]), str(sla_cred["alerta_90d"])]
+        ]
+        t_sla = ax_res_sla.table(cellText=rows_sla_tb, colLabels=["Faixa de SLA", "Demandas", "Credenc.", "Total"], loc='upper center', cellLoc='center', colWidths=[0.46, 0.18, 0.18, 0.18])
+        t_sla.auto_set_font_size(False); t_sla.set_fontsize(8.5); t_sla.scale(1, 1.45)
+        cores_linhas_sla = ['#e2e3e5', '#fff3cd', '#ffe8cc', '#f8d7da', '#e8d9f8']
+        for (r_i, c_i), cell in t_sla.get_celld().items():
+            if r_i == 0:
+                cell.set_facecolor('#333333'); cell.set_text_props(color='white', fontweight='bold')
+            else:
+                cell.set_facecolor(cores_linhas_sla[r_i - 1])
+
+        pdf.savefig(fig1)
+        plt.close(fig1)
+
+        fig2 = plt.figure(figsize=(11.69, 8.27))
+        fig2.patch.set_facecolor('#ffffff')
+
+        fig2.text(0.04, 0.94, "POSTAL SAÚDE - PRODUTIVIDADE & CREDENCIAMENTO EM FASES", fontsize=15, fontweight='bold', color='#004b87')
+        fig2.text(0.04, 0.91, f"Página 2 - Período: {dados['label_periodo']} ({dt_emissao})", fontsize=9.5, color='#555555')
+
+        ax_p1 = fig2.add_axes([0.06, 0.54, 0.41, 0.31])
+        if dados_prod:
+            nomes_p = [str(r[0]) for r in dados_prod]
+            vals_p = [r[1] for r in dados_prod]
+            ax_p1.bar(nomes_p, vals_p, color='#198754')
+            ax_p1.set_xticklabels(nomes_p, rotation=30, ha='right', fontsize=8)
+        else:
+            ax_p1.text(0.5, 0.5, "Sem dados de demandas finalizadas", ha='center', va='center')
+        ax_p1.set_title("5. Produtividade por Colaborador (Rotinas Finalizadas)", fontsize=10.5, fontweight='bold', color='#004b87')
+        ax_p1.grid(axis='y', linestyle='--', alpha=0.4)
+
+        ax_p2 = fig2.add_axes([0.55, 0.54, 0.41, 0.31])
+        if dados_tipo:
+            nomes_t = [str(r[0]) for r in dados_tipo]
+            vals_t = [r[1] for r in dados_tipo]
+            ax_p2.bar(nomes_t, vals_t, color='#008CBA')
+            ax_p2.set_xticklabels(nomes_t, rotation=30, ha='right', fontsize=8)
+        else:
+            ax_p2.text(0.5, 0.5, "Sem dados por tipo", ha='center', va='center')
+        ax_p2.set_title("6. Volume por Tipo de Demanda (Rotinas)", fontsize=10.5, fontweight='bold', color='#004b87')
+        ax_p2.grid(axis='y', linestyle='--', alpha=0.4)
+
+        ax_cf = fig2.add_axes([0.04, 0.06, 0.92, 0.38])
+        ax_cf.axis('off')
+        em_ana_c = cred_parecer.get('EM ANÁLISE', 0) + cred_parecer.get('EM ANALISE', 0) + cred_parecer.get('PENDENTE', 0)
+        def_c = cred_parecer.get('DEFERIDO', 0) + cred_parecer.get('FINALIZADA', 0)
+        dev_c = cred_parecer.get('DEVOLVIDO', 0)
+        ind_c = cred_parecer.get('INDEFERIDO', 0)
+        ax_cf.set_title(
+            f"7. Pipeline de Credenciamento - Fases Atuais (Em Análise: {em_ana_c} | Deferidos: {def_c} | Devolvidos: {dev_c} | Indeferidos: {ind_c})",
+            fontsize=10.5, fontweight='bold', loc='left', color='#004b87', pad=8
+        )
+        fases_ordenadas = sorted(cred_fases_dict.items(), key=lambda x: x[0])
+        if fases_ordenadas:
+            rows_fases = [[f_n, str(f_q)] for f_n, f_q in fases_ordenadas]
+            t_cf = ax_cf.table(cellText=rows_fases, colLabels=["Fase Atual do Processo (ULTIMAFASE = SIM)", "Qtd. Processos"], loc='upper center', cellLoc='left', colWidths=[0.80, 0.20])
+            t_cf.auto_set_font_size(False); t_cf.set_fontsize(8.5); t_cf.scale(1, 1.35)
+            for (r_i, c_i), cell in t_cf.get_celld().items():
+                if r_i == 0:
+                    cell.set_facecolor('#004b87'); cell.set_text_props(color='white', fontweight='bold')
+                elif r_i % 2 == 0:
+                    cell.set_facecolor('#f8f9fa')
+        else:
+            ax_cf.text(0.5, 0.5, "Nenhum registro encontrado no módulo Credenciamento - Fases para este período.", ha='center', va='center', fontsize=10, color='#777777')
+
+        pdf.savefig(fig2)
+        plt.close(fig2)
+
+    pdf_buffer.seek(0)
+    return send_file(
+        pdf_buffer,
+        download_name=f"Relatorio_Executivo_COCAP_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.pdf",
+        as_attachment=True,
+        mimetype='application/pdf'
     )
 
 @app.route('/pentefino')
